@@ -20,7 +20,7 @@
 
   // rowIndex identifies the physical rack row (q in the hall mesh). columnIndex is a position along it.
   // All spatial indices are zero-based. module.slot is a one-based number printed on the enclosure.
-  function build({hallIndex=0,rackIndex=0,rowIndex=0,columnIndex=0,profile='gb200',architecture='交流 UPS',pcieServers=6}={}) {
+  function build({hallIndex=0,rackIndex=0,rowIndex=0,columnIndex=0,profile='gb200',architecture='交流 UPS',pcieServers=6,pcieCards=4}={}) {
     for (const [key,n] of Object.entries({hallIndex,rackIndex,rowIndex,columnIndex})) {
       checkInteger(n,0,Number.MAX_SAFE_INTEGER-1,key);
     }
@@ -29,6 +29,7 @@
     const pcie = profile === 'pcie', isDC = architecture !== '交流 UPS';
     const serverCount = pcie ? checkInteger(pcieServers,1,10,'PCIe 服务器数') : 18;
     const displayedServers = pcie ? Math.min(4,serverCount) : serverCount;
+    const perServer = pcie ? checkInteger(pcieCards,1,4,'每台服务器单 GPU 卡数') : 4;
     const hallCode = 'H'+serial(hallIndex+1), rowCode = 'L'+serial(rowIndex+1);
     const id = hallCode+'-R'+serial(rackIndex+1);
     const label = '机房 '+serial(hallIndex+1)+' · 第 '+serial(rowIndex+1)+' 列 · 柜位 '+serial(columnIndex+1);
@@ -37,6 +38,10 @@
       isDC?'机架直流分配 '+feed:'机柜 PDU '+feed,'pdu',index,{feed,rowdistId:rowdist.id}));
     const servers = Array.from({length:displayedServers},(_,i) => node(id+(pcie?'-S':'-T')+serial(i+1),
       (pcie?'服务器 ':'计算托盘 ')+serial(i+1),'server',i,{number:i+1}));
+    const gpus = servers.flatMap(server => Array.from({length:perServer},(_,i)=>
+      node(server.id+'-G'+serial(i+1),'GPU '+serial(i+1),'gpu',i,{number:i+1,serverId:server.id})));
+    const boardEdges = gpus.map(gpu => ({id:gpu.serverId+'>'+gpu.id,from:gpu.serverId,to:gpu.id,
+      medium:pcie?'服务器供电、卡侧稳压及单 GPU 卡负载':'托盘输入、板级稳压及 GPU 负载'}));
     const buses = pcie ? servers.map(s => node(id+'-BOARD'+serial(s.number),
       '服务器 '+serial(s.number)+' 电源背板','bus',s.index,{serverIds:[s.id]})) :
       [node(id+'-BUS','机柜共用直流母排','bus',0,{serverIds:servers.map(s=>s.id)})];
@@ -67,7 +72,7 @@
       ' A、B 表示两条示意分支，上游独立性按项目单线图核实。'+
       (isDC?'直流 A、B 各自有完整供电回路。本例假定机架采用匹配电压的 DC/DC 模块，整柜输入兼容性需按型号确认。':'');
     return {id,label,hallIndex,rackIndex,rowIndex,columnIndex,profile,profileLabel:profiles[profile],architecture,isDC,
-      rowdist,pdus,modules,servers,buses,edges,serverCount,scope,redundancy,
+      rowdist,pdus,modules,servers,buses,edges,gpus,boardEdges,perServer,serverCount,scope,redundancy,
       source:sources[profile],architectureSource:isDC?(architecture==='集中式 HVDC'?sources.hvdc:sources.dc):null};
   }
 
@@ -82,5 +87,17 @@
     return {module:part,rowdist:model.rowdist,pdu,bus,servers,alternateModules,pathIds,edgeIds,redundancy:model.redundancy};
   }
 
-  root.GridRackCircuit = Object.freeze({build,trace});
+  // The whole-module trace remains one-to-many. A tour follows just one named load on that branch.
+  function branch(model,{slot=1,serverNumber,gpuNumber=1}={}){
+    const upstream=trace(model,slot);
+    if(!upstream)return null;
+    const server=serverNumber==null?upstream.servers[0]:upstream.servers.find(s=>s.number===serverNumber);
+    const gpu=server&&model.gpus.find(g=>g.serverId===server.id&&g.number===gpuNumber);
+    if(!gpu)return null;
+    const nodes=[upstream.rowdist,upstream.pdu,upstream.module,upstream.bus,server,gpu];
+    const edges=nodes.slice(1).map((n,i)=>nodes[i].id+'>'+n.id);
+    return {nodes,edgeIds:edges,server,gpu,module:upstream.module,pdu:upstream.pdu,bus:upstream.bus,rowdist:upstream.rowdist};
+  }
+
+  root.GridRackCircuit = Object.freeze({build,trace,branch});
 })(typeof window==='undefined'?globalThis:window);

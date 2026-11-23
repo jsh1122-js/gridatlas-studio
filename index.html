@@ -18,6 +18,7 @@
   <link rel="stylesheet" href="design.css">
   <link rel="stylesheet" href="twin.css?v=bea8b45280">
   <link rel="stylesheet" href="twin-plan.css"><link rel="stylesheet" href="twin-rack-guide.css"><link rel="stylesheet" href="twin-device-links.css?v=ce4eb35622"><link rel="stylesheet" href="twin-observe.css?v=7d526b4385">
+  <link rel="stylesheet" href="twin-power-tour.css?v=be76296ee2"><link rel="stylesheet" href="twin-power-camera.css?v=230f7c6de3">
   <link rel="stylesheet" href="studio.css"><link rel="stylesheet" href="equipment/equipment.css"><link rel="stylesheet" href="equipment/fabric.css"><link rel="stylesheet" href="equipment/relations.css"><link rel="stylesheet" href="equipment/inspection.css">
   <script defer src="map-data.js"></script>
   <script defer src="map.js"></script>
@@ -31,16 +32,18 @@
   <script defer src="station-view.js"></script>
   <script defer src="nearby-data.js"></script>
   <script defer src="nearby-ui.js"></script>
-  <script defer src="twin-rack-circuit.js"></script>
-  <script defer src="twin-rack-guide.js"></script>
-  <script defer src="twin-rack-view.js"></script>
-  <script defer src="twin-yard.js?v=12e8f5e208"></script>
-  <script defer src="twin-device-links.js?v=26bc989364"></script>
+  <script defer src="twin-rack-circuit.js?v=a5e8624375"></script>
+  <script defer src="twin-rack-guide.js?v=2ce50e668e"></script>
+  <script defer src="twin-rack-view.js?v=0282ae090b"></script>
+  <script defer src="twin-yard.js?v=a443405911"></script>
+  <script defer src="twin-device-links.js?v=addb254075"></script>
   <script defer src="twin-device-overlay.js?v=c5e411c369"></script>
-  <script defer src="twin-campus.js?v=77bc8f4b9f"></script>
+  <script defer src="twin-power-camera.js?v=cd2cd0dbee"></script>
+  <script defer src="twin-power-tour.js?v=60025f3ec4"></script>
+  <script defer src="twin-campus.js?v=009be77a82"></script>
   <script defer src="twin-territory.js"></script>
-  <script defer src="twin.js?v=00c0db8e3e"></script>
-  <script defer src="app.js?v=cda491d638"></script>
+  <script defer src="twin.js?v=0851d3073f"></script>
+  <script defer src="app.js?v=307114548c"></script>
 </head>
 <body>
   <a href="#main" class="skip">跳到主要内容</a>
@@ -64,10 +67,12 @@
           <div class="tw-visual-head"><div class="tw-section-title"><i data-i="cube"></i><h2>空间视图</h2></div>
             <div class="tw-scene-actions"><div class="tw-tabs" aria-label="选择三维视图">
               <button type="button" data-twin-mode="campus" aria-pressed="true">园区总览</button>
+              <button type="button" id="tw-layout" aria-pressed="false">总平面</button>
               <button type="button" data-twin-mode="cutaway" aria-pressed="false">机房剖视</button>
               <button type="button" data-twin-mode="territory" aria-pressed="false">区域电网</button>
             </div>
             <button type="button" id="tw-yard-open" class="tw-yard-entry">变电站</button>
+            <button type="button" id="tw-tour-open" aria-controls="tw-power-tour">供电自动讲解</button>
             <button id="tw-expand" type="button" aria-label="全屏查看场景" title="全屏查看场景" aria-pressed="false"><i data-i="expand"></i></button></div>
           </div>
           <div class="tw-stage">
@@ -81,6 +86,7 @@
               <button type="button" data-camera="home" aria-label="复位场景视角" title="复位视角"><i data-i="focus"></i></button>
             </div>
           </div>
+          <section id="tw-power-tour" hidden aria-label="供电自动讲解"></section>
           <section id="tw-rack-guide" hidden aria-label="机柜供电讲解"></section>
           <section id="tw-device-panel" hidden aria-label="设备联动"></section>
           <div class="tp-routes" id="tp-routes" hidden><div class="tp-trace-head"><span>追踪回路</span><div class="tp-switches" aria-label="选择回路"></div></div><div id="tp-chain" aria-label="沿回路查看设备"></div></div>

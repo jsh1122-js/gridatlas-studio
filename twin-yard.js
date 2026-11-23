@@ -1,7 +1,11 @@
 /* Conceptual campus substation. Coordinates are local to the generated site. */
 (() => {
   'use strict';
-  function build(m,anchors,units){
+  function build(m,anchors,units,halls=3){
+    const yard={incoming:[],transformers:[],feeders:[],footprints:[]};
+    const count=Math.max(2,Math.min(4,units)),outgoing=Math.max(1,Math.min(4,halls));
+    const pitch=20.9/count,bays=count+outgoing;
+    const bayY=index=>10.98+index*9/(bays-1);
     const {box,beam,cylinder,rect}=m;
     const steel='#96aab0',edge='#d2dada',dark='#465c69',concrete='#aab6b6',enamel='#4f717c',ceramic='#abc4c2',copper='#bb946a';
     const x0=29,y0=2.6,ground=.71;
@@ -20,7 +24,7 @@
     function hanging(a,b,drop,r=.055){
       const dx=b[0]-a[0],dy=b[1]-a[1],dz=b[2]-a[2];
       const chain=[0,.25,.5,.75,1].map(t=>[a[0]+dx*t,a[1]+dy*t,a[2]+dz*t-4*drop*t*(1-t)]);
-      cable(chain,r,'#687d7f');
+      cable(chain,r,'#687d7f');return chain;
     }
     m.group('sub-incoming');
     // Steel portal, suspended insulators and three distinct entrance terminations.
@@ -34,16 +38,18 @@
     for(let i=0;i<3;i++){
       const x=33.5+i*4.1;base(x-.53,7.27,1.06,1.37);cylinder(x,7.9,1.01,.15,1.75,steel,edge,6);
       insulator(x,7.9,2.75,1.53,.32);insulator(x,4.8,6.28,1.22,.25);
-      hanging([x,4.8,6.3],[x,7.9,4.36],.44);
-      beam([x,7.9,4.36],[x,9.3,4.7],.08,copper,6);
+      const drop=hanging([x,4.8,6.3],[x,7.9,4.36],.44),end=[x,9.3,4.7];
+      beam(drop.at(-1),end,.08,copper,6);
+      if(i===1)yard.incoming=[...drop,end];
     }
     anchors['sub-incoming']=[37.7,7.4,4.85];
-    const count=Math.max(2,Math.min(4,units)),pitch=20.9/count;
     for(let i=0;i<count;i++){
       const pick=i===0?'sub-transformer':'sub-transformer-'+(i+1);
       m.group(pick);
       const x=30.3+i*pitch,w=pitch-1.2,y=12.2,bodyY=y+.83,span=w-1.35;
       anchors[pick]=[x+w*.5,16.1,4.25];
+      const branch={key:pick,primary:[],coupling:[],secondary:[],bus:[54.26,bayY(i),3.78]};yard.transformers.push(branch);
+      yard.footprints.push({id:pick,x0:x-.12,y0:y-.16,x1:x+w+.14,y1:y+8.44});
       base(x-.12,y-.16,w+.26,8.6);
       box(x+.65,bodyY,1.18,span,5.78,3.15,enamel,'#9cb3b3');
       box(x+.56,bodyY-.11,4.30,span+.18,6.02,.16,'#667e86','#acc0bc');
@@ -79,7 +85,13 @@
         const px=x+.64+span*(ph+.5)/3;
         insulator(px,bodyY+1.28,4.47,1.89,.28,5);
         insulator(px,bodyY+3.82,4.47,1.02,.20,3);
-        hanging([33.5+ph*4.1,9.3,4.7],[px,bodyY+1.28,6.48],.57);
+        const high=[px,bodyY+1.28,6.48],low=[px,bodyY+3.82,5.56];
+        const lead=hanging([33.5+ph*4.1,9.3,4.7],high,.57);
+        if(ph===1){
+          branch.primary=lead;
+          // These points traverse the transformer for the explanation only. No copper spans the insulation.
+          branch.coupling=[high,[px,high[1],3.72],[px,bodyY+2.57,3.08],[px,low[1],3.72],low];
+        }
       }
     }
     // Secondary leads drop to the cable trench towards the switch house.
@@ -87,18 +99,24 @@
       m.group(i===0?'sub-transformer':'sub-transformer-'+(i+1));
       const x=30.3+i*pitch,w=pitch-1.2,span=w-1.35;
       for(let ph=0;ph<3;ph++){
-        const px=x+.64+span*(ph+.5)/3,y=16.85;
-        cable([[px,y,5.56],[px,y+.42,5.68],[px+.23,y+1.48,5.23],[x+w-.28-ph*.15,20.2,3.49],[x+w-.28-ph*.15,20.47,.98]],.048,'#506a73');
+        const px=x+.64+span*(ph+.5)/3,y=16.85,branch=yard.transformers[i];
+        const dropX=x+w-.28-ph*.15,trenchY=21.29+i*.17+ph*.052,laneX=51.12+i*.20+ph*.055,yBay=branch.bus[1]+(ph-1)*.15;
+        const lead=[[px,y,5.56],[px,y+.42,5.68],[px+.23,y+1.48,5.23],[dropX,20.2,3.49],[dropX,20.47,1.03],
+          [dropX,trenchY,1.03],[laneX,trenchY,1.03],[laneX,yBay,1.03],[laneX,yBay,2.52],[53.70,yBay,2.52]];
+        cable(lead,.056,['#70848b','#a28b6a','#6a8285'][ph]);
+        if(ph===1)branch.secondary=lead;
+        beam([53.67,yBay,2.52],[54.22,yBay,2.52],.10,steel,6);
       }
     }
     m.group('sub-switchgear');
     // Cutaway switch house with a common gas-insulated bus and repeated breaker bays.
+    yard.footprints.push({id:'switch-house',x0:52.6,y0:9.95,x1:60.6,y1:21.35});
     base(52.6,9.95,8.0,11.4);
     box(52.7,10.06,1.02,7.7,.20,3.70,'#92a4ac','#d0dadd');
     box(60.18,10.10,1.02,.20,11.1,2.5,'#8e9fa8','#c4d0d3');
     beam([54.26,10.65,3.78],[54.26,20.48,3.78],.44,'#93abb1',12);
-    for(let k=0;k<4;k++){
-      const y=11.45+k*2.63;
+    for(let k=0;k<bays;k++){
+      const y=bayY(k);
       for(const x of [53.83,56.08])box(x,y-.31,1.03,.31,.62,1.42,'#647981',steel);
       beam([54.23,y,2.53],[56.95,y,2.53],.54,'#849da4',12);
       beam([54.26,y,2.61],[54.26,y,3.78],.36,steel,8);
@@ -109,18 +127,25 @@
     }
     anchors['sub-switchgear']=[55.3,15.7,3.18];
     m.group('sub-feeder');
+    yard.footprints.push({id:'feeder-pad',x0:52.55,y0:21.9,x1:60.55,y1:25.45});
     base(52.55,21.9,8,3.55);
-    for(let k=0;k<3;k++){
-      const x=53.1+k*2.38;
-      box(x,22.2,1.04,1.95,1.83,2.18,'#637e89','#adbdbe');
-      box(x+.15,24.04,1.21,1.63,.07,1.74,'#899da4','#afbfbe');
-      rect(x+.2,22.64,1.50,.2,3.24,'#d6ab79');
+    for(let k=0;k<outgoing;k++){
+      const stride=7.15/outgoing,w=Math.min(1.95,stride-.20),x=52.94+k*stride;
+      box(x,22.2,1.04,w,1.83,2.18,'#637e89','#adbdbe');
+      box(x+.15,24.04,1.21,w-.30,.07,1.74,'#899da4','#afbfbe');
+      rect(x+.2,22.64,w-.43,.2,3.24,'#d6ab79');
       box(x+.51,24.12,2.36,.63,.08,.32,'#344d59');
-      const y=22.22;
-      cable([[x+.35,y,3.18],[x+.35,y-.36,3.56],[x+.35,y-1.02,3.56],[x+.35,y-1.25,2.93]],.085,'#8e7355');
+      const y=22.22,bay=bayY(count+k),lane=57.04+k*.10;
+      const bus=[54.26,bay,3.78],breaker=[bus,[54.26,bay,2.53],[56.95,bay,2.53]];
+      const inlet=[x+.35,y,3.18],terminal=[x+w*.54,24.16,1.41];
+      const lead=[breaker.at(-1),[lane,bay,2.53],[lane,bay,1.16],[lane,20.87+k*.11,1.16],[x+.35,20.87+k*.11,1.16],
+        [x+.35,20.87+k*.11,2.93],[x+.35,y-1.02,3.56],[x+.35,y-.36,3.56],inlet];
+      cable(lead,.080,'#9a8465');
+      cylinder(terminal[0],terminal[1],1.29,.12,.17,'#9d855e',steel,8);
+      yard.feeders.push({bus,breaker,lead,port:[inlet,[inlet[0],23.12,2.44],[terminal[0],23.72,1.41],terminal],terminal});
     }
     anchors['sub-feeder']=[56.50,23.1,2.85];
-    anchors.power=[44,14.9,4.95];
+    anchors.power=[44,14.9,4.95];return yard;
   }
   window.GridYard={build};
 })();

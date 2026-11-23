@@ -230,8 +230,10 @@
     const hash=location.hash.slice(1);
     const direct=/^equipment\/([a-z0-9:-]+(?:\/[a-zA-Z0-9_-]+)?)$/.exec(hash);
     const intoRack=hash==='twin/rack';
+    const intoTour=hash==='twin/tour';
+    const intoLayout=hash==='twin/layout';
     const intoDevice=/^twin\/device\/([a-z0-9-]+)$/.exec(hash);
-    let id=direct?'equipment':intoRack||intoDevice?'twin':hash;if(!allowed.includes(id))id='twin';
+    let id=direct?'equipment':intoRack||intoTour||intoLayout||intoDevice?'twin':hash;if(!allowed.includes(id))id='twin';
     const wasInspecting=inspection.open, target=history.state?.gridatlasInspect;
     const fromRoom=id==='equipment' && typeof target==='string' && twin && (activeRoute==='twin'||wasInspecting);
     const sequence=++inspectSequence;
@@ -257,6 +259,8 @@
       if(!wasInspecting||entryRevision!==current().updatedAt)twin.update(current());
       if(!wasInspecting&&intoRack)twin.openRack();
       if(!wasInspecting&&intoDevice)twin.observe(intoDevice[1]);
+      if(!wasInspecting&&intoTour)twin.startPowerTour();
+      if(!wasInspecting&&intoLayout)twin.openLayout();
       if(wasInspecting){
         twin.resumeFromInspection();
         if(entryFocus?.isConnected)entryFocus.focus({preventScroll:true});
@@ -283,7 +287,7 @@
       else if(id==='energy')energyContext();
     }
     document.title=({twin:'算电数字孪生',equipment:'设备剖解',overview:'算电选址工作台',world:'全球基础设施地图',design:'方案设计',aidc:'AIDC 数据台',industry:'电力行业数据库',energy:'电价与政策资料',library:'方案库'})[id]+' · 算电图研';
-    if((intoRack||intoDevice)&&!wasInspecting)requestAnimationFrame(()=>document.querySelector('.tw-visual').scrollIntoView({block:'start'}));
+    if((intoRack||intoDevice||intoTour||intoLayout)&&!wasInspecting)requestAnimationFrame(()=>document.querySelector('.tw-visual').scrollIntoView({block:'start'}));
     else if(!fromRoom && !(wasInspecting && id==='twin'))scrollTo(0,0);
   }
   function goto(id) {if(location.hash==='#'+id)route();else location.hash=id;}

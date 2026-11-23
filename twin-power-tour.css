@@ -1,0 +1,34 @@
+.tpt-panel {
+  background:#10212e;color:#e8f2f6;border:1px solid #314a58;border-top:2px solid #dbad70;
+  border-radius:7px;padding:11px 14px;min-width:0;line-height:1.45;
+}
+.tpt-panel [hidden]{display:none!important}
+.tpt-head,.tpt-controls,.tpt-voice{display:flex;align-items:center}
+.tpt-head{gap:10px;justify-content:space-between}
+.tpt-head h3{color:#e8f2f6;font-size:.93rem;line-height:1.3;margin:0}
+.tpt-count{font-size:.76rem;color:#e7c28e;font-variant-numeric:tabular-nums}
+.tpt-progress{display:block;width:100%;height:3px;appearance:none;background:#293c47;border:0;border-radius:3px;margin:7px 0;color:#e3b576}
+.tpt-progress::-webkit-progress-bar{background:#293c47;border-radius:3px}
+.tpt-progress::-webkit-progress-value{background:#e3b576;border-radius:3px}
+.tpt-progress::-moz-progress-bar{background:#e3b576;border-radius:3px}
+.tpt-stage{display:flex;align-items:baseline;flex-wrap:wrap;gap:1px 9px}
+.tpt-title{color:#edf7f6;font-size:.95rem}
+.tpt-text{font-size:.84rem;color:#bdcfd7;margin:0;min-width:0}
+.tpt-controls{gap:5px;flex-wrap:wrap;margin-top:8px}
+.tpt-controls button,.tpt-voice select{
+  color:#d5e6ec;background:#1a2e3b;border:1px solid #3a515d;border-radius:5px;
+  font:inherit;font-size:.77rem;line-height:1.35;min-height:32px;padding:5px 9px;cursor:pointer;
+}
+.tpt-controls .tpt-primary{background:#29413d;border-color:#577e70;color:#bdf3dd}
+.tpt-controls button:disabled,.tpt-voice select:disabled{opacity:.49;cursor:default}
+.tpt-controls button:hover:enabled,.tpt-voice select:hover:enabled{border-color:#76a29c}
+.tpt-controls button:focus-visible,.tpt-voice select:focus-visible{outline:2px solid #86dfc9;outline-offset:2px}
+.tpt-voice{margin-left:auto;color:#aec3cf;gap:5px;font-size:.77rem}
+.tpt-voice select{max-width:190px;color-scheme:dark}
+.tpt-status{display:block;font-size:.77rem;color:#e3c599;margin-top:5px}
+.tpt-speech-note{display:block;font-size:.74rem;color:#aabfca;margin-top:4px}
+@media (max-width:650px){
+  .tpt-panel{padding:9px 10px}.tpt-controls{gap:5px 4px}
+  .tpt-controls button,.tpt-voice select{min-height:35px;padding:5px 7px}
+  .tpt-voice{margin-left:0}.tpt-voice select{max-width:134px}
+}

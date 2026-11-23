@@ -1,6 +1,7 @@
 (() => {
   'use strict';
   const $ = id => document.getElementById('tw-' + id);
+  const campusNote='园区为规划示意，室外机组台数仅供展示';
   const number = (n, digits = 2) => Number.isFinite(n) ? n.toLocaleString('zh-CN', {maximumFractionDigits: digits}) : '—';
   const distance = n => n < 1 ? Math.round(n * 1000) + ' m' : n.toFixed(2) + ' km';
   const element = (tag, text, className) => {
@@ -21,27 +22,95 @@
       onToggleView:()=>campus?.toggleRackView(),onStep:step=>campus?.focusRackStep(step),
       onToggleDoor:()=>campus?.toggleRackDoor(),onToggleExtract:()=>campus?.toggleRackExtract()
     });
-    let observing=null,rackState=null,watchRevision=0,observationConfig='',previewing=null,closeView=false,yardUnit=1;
+    let observing=null,rackState=null,watchRevision=0,observationConfig='',previewing=null,closeView=false,yardUnit=1,coolingUnit=1,layoutActive=false,paintingPanel=false;
+    const outside=key=>key.startsWith('sub-')||key.startsWith('cooling-unit-');
     const visual=document.querySelector('.tw-visual');
+    let tourConfig='';
+    const geometryConfig=p=>JSON.stringify([p.id,p.config.architecture,p.config.cooling,p.config.it,p.config.pue,p.config.density,p.spacePlan,p.rackStudy,p.rackMix]);
+    const tour=GridPowerTour.mount($('power-tour'),{
+      onPrepare:()=>{
+        const branch={slot:rackState?.slotId||1,serverNumber:rackState?.serverNumber,gpuNumber:rackState?.gpuNumber};
+        tourConfig=geometryConfig(project);
+        if(observing)clearObservation(false);
+        if(mode!=='campus')changeMode('campus');
+        return campus?.preparePowerTour({yardUnit,...branch})||[];
+      },
+      onTravel:request=>{
+        if(observing)clearObservation(false);
+        const room=request.step.scope!=='yard';
+        if(mode!==(room?'cutaway':'campus'))changeMode(room?'cutaway':'campus');
+        visual.classList.add('tw-following');
+        $('scene-source').textContent='亮线沿本方案建模导体行进，设备内部的虚线表示能量变换';
+        return campus.followPowerTour(request);
+      },
+      onHalt:({reason})=>{
+        if(reason==='inspect'||reason==='close'){
+          visual.classList.remove('tw-following');
+          campus?.haltPowerTour(true);
+        }else campus?.haltPowerTour(false);
+      },
+      onFinish:({reason})=>{
+        if(reason==='close'){
+          visual.classList.remove('tw-following');campus?.haltPowerTour(true);
+          if(!observing&&mode!=='territory')$('scene-source').textContent=campusNote;
+        }
+      },
+      onInspect:inspectTourStop
+    });
+    function stopForInspection(){
+      if(!tour.getState().active)return;
+      tour.interrupt('inspect');visual.classList.remove('tw-following');campus?.haltPowerTour(true);
+    }
+    function inspectTourStop(step){
+      stopForInspection();
+      if(step.scope==='rack'){
+        if(mode!=='cutaway')changeMode('cutaway');
+        campus?.inspectTourLoad(step);
+      }else if(step.key==='hall-entry'){
+        changeMode('cutaway');selectCampus('it');
+      }else observe(step.key);
+    }
+    function userInteracted(event){
+      if(event.target.closest('#tw-power-tour,#tw-tour-open,.tw-tour-pin,#tw-expand'))return;
+      if(event.type==='keydown'&&!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','+','-','=','Home','Escape','Enter',' '].includes(event.key))return;
+      stopForInspection();
+    }
+    for(const type of ['pointerdown','click','keydown','wheel'])visual.addEventListener(type,userInteracted,{capture:true,passive:true});
+    $('tour-open').onclick=()=>tour.start({speakIfAvailable:true});
+    function showLayout(on){
+      layoutActive=on;$('layout').setAttribute('aria-pressed',String(on));
+      modeButtons.find(b=>b.dataset.twinMode==='campus').setAttribute('aria-pressed',String(!on&&mode==='campus'));
+      if(on)$('scene-source').textContent='点机房编号可进入剖视，室外机组台数为示意';
+      else if(mode==='campus')$('scene-source').textContent=campusNote;
+    }
+    function openLayout(){
+      if(tour.getState().active)tour.close();
+      if(observing)clearObservation();
+      changeMode('campus');selectCampus(null);campus?.setLayoutView(true);
+    }
+    $('layout').onclick=()=>layoutActive?campus?.setLayoutView(false):openLayout();
     const overlay=GridDeviceOverlay.mount($('device-ink'),key=>observe(key));
     const panel=GridDeviceLinks.mount($('device-panel'),{
       onSelect:key=>observe(key),onBack:()=>{
         if(observing){
-          const yard=observing.key.startsWith('sub-');
+          const yard=outside(observing.key);
           clearObservation();
           if(yard)changeMode('campus');
         }else if(rackState)campus?.closeRack();
       },
       onPreview:link=>{
+        if(paintingPanel)return;
         previewing=link;overlay.preview(link);
         if(!observing&&rackState&&link){
           const next=rackState.slotId?'psu':'rack';observe(next,{preview:link});
         }else if(observing){
+          if(observing.key.startsWith('cooling-unit-')&&mode==='campus')changeMode('cutaway',true);
           closeView=false;panel.setCloseView(false);frameObservation();
         }
       },
       onView:(near,d)=>{
         if(!observing)observe(d.key);
+        if(d.key.startsWith('cooling-unit-'))changeMode(near?'campus':'cutaway',true);
         closeView=near;panel.setCloseView(near);frameObservation();
       },
       onDetail:(target,d)=>{
@@ -57,7 +126,8 @@
     function configForDevice(){
       const units=Math.min(4,Math.max(2,Math.round(2+Math.log2(metrics.facility/80))));
       yardUnit=Math.min(yardUnit,units);
-      return {architecture:project.config.architecture,cooling:project.config.cooling,yardUnits:units,yardUnit,
+      const coolingUnits=GridCampus.coolingUnitCount(project.config);coolingUnit=Math.min(coolingUnit,coolingUnits);
+      return {architecture:project.config.architecture,cooling:project.config.cooling,yardUnits:units,yardUnit,coolingUnits,coolingUnit,
         profile:rackState?.rack.profile??GridRackStudy.clean(project.rackStudy).profile};
     }
     function updateProjection(){
@@ -65,7 +135,8 @@
       overlay.draw(keys=>campus.getEquipmentProjection(keys));
     }
     function paintObservation(d){
-      const c=configForDevice();panel.update(d.key,c);
+      paintingPanel=true;
+      try{panel.update(d.key,configForDevice());}finally{paintingPanel=false;}
       overlay.update(d);overlay.setPlaying(playing);
       visual.classList.add('tw-observing');
       $('scene-source').textContent='连线表示设备间的功能关系与传递方向';updateProjection();
@@ -73,7 +144,7 @@
     function clearObservation(restore=true){
       ++watchRevision;observing=null;previewing=null;closeView=false;panel.clear();overlay.update(null);visual.classList.remove('tw-observing');
       if(restore)campus?.clearEquipmentFocus();
-      if(mode!=='territory')$('scene-source').textContent=mode==='cutaway'?'机柜为代表性示意，规划数量按方案折算':'园区建筑与设备布局为方案示意';
+      if(mode!=='territory')$('scene-source').textContent=mode==='cutaway'?'机柜为代表性示意，规划数量按方案折算':campusNote;
     }
     function frameObservation(){
       if(!observing)return;
@@ -84,17 +155,20 @@
     function observe(input,options={}){
       if(!project)return;
       if(typeof input!=='string')return;
+      if(tour.getState().active)stopForInspection();
       const k=input.split('/')[0];
-      const key=GridDeviceLinks.resolveSceneKey(k==='power'?'sub-transformer':k==='cooling'?'liquid':k,configForDevice());
+      const key=GridDeviceLinks.resolveSceneKey(k==='power'?'sub-transformer':k,configForDevice());
       const unit=/^sub-transformer(?:-([2-4]))?$/.exec(key);
       if(unit)yardUnit=Number(unit[1]||1);
+      const plant=/^cooling-unit-(\d+)$/.exec(key);if(plant)coolingUnit=Number(plant[1]);
       const cfg=configForDevice(),d=GridDeviceLinks.describe(key,cfg);if(!d)return;
       const peers=[...new Set(d.links.filter(link=>link.kind!=='reference').map(link=>link.key))];
-      const openRoom=!key.startsWith('sub-')||peers.some(p=>!p.startsWith('sub-'));
+      const openRoom=!outside(key)||(!plant&&peers.some(p=>!outside(p)));
       if(mode==='territory')changeMode(openRoom?'cutaway':'campus');
       else if(openRoom&&mode==='campus')changeMode('cutaway');
+      else if(plant&&mode==='cutaway')changeMode('campus');
       ++watchRevision;observing=d;previewing=options.preview||null;
-      closeView=false;observationConfig=JSON.stringify(cfg);paintObservation(d);panel.setCloseView?.(false);if(previewing)overlay.preview(previewing);
+      closeView=Boolean(plant);observationConfig=JSON.stringify(cfg);paintObservation(d);panel.setCloseView(closeView);if(previewing)overlay.preview(previewing);
       frameObservation();
     }
     function syncRack(state){
@@ -171,20 +245,23 @@
       } else {
         territory?.destroy();
         territory = null;
-        if (!campus) campus = GridCampus.mount($('campus'), {onRackChange:syncRack,onProjectionChange:updateProjection,onHallChange:()=>clearObservation(false),onSelect:selectCampus,onInspect:inspectTarget,onOpenHall:()=>{selectCampus('it');changeMode('cutaway');}});
+        if (!campus) campus = GridCampus.mount($('campus'), {onRackChange:syncRack,onProjectionChange:updateProjection,onTourInspect:inspectTourStop,onLayoutChange:showLayout,onHallChange:()=>clearObservation(false),onSelect:selectCampus,onInspect:inspectTarget,onOpenHall:()=>{selectCampus('it');changeMode('cutaway');}});
         campus.update({project, metrics});
         campus.setPlaying?.(playing);
         campus.setMode(mode);
         campus.setCircuit?.(planner.getCircuit());
         campus.setSelected(selected);
       }
-      if(!observing)$('scene-source').textContent = {campus:'园区建筑与设备布局为方案示意', cutaway:'机柜为代表性示意，规划数量按方案折算', territory:'设施位置来自 OSM，距离按场址至站点代表点计算'}[mode];
+      if(!observing)$('scene-source').textContent = {campus:campusNote, cutaway:'机柜为代表性示意，规划数量按方案折算', territory:'设施位置来自 OSM，距离按场址至站点代表点计算'}[mode];
       planner.renderRoutes(mode);
+      if(layoutActive)showLayout(true);
       renderDetails();
     }
-    function changeMode(nextMode) {
+    function changeMode(nextMode,keepObservation=false) {
       if (mode !== nextMode) {
-        if(observing)clearObservation();
+        if(layoutActive)campus?.setLayoutView(false);
+        if(nextMode==='territory'&&tour.getState().active)tour.close();
+        if(observing&&!keepObservation)clearObservation();
         mode = nextMode;
         if(mode==='cutaway')onPreload?.();
         if (mode !== 'territory') selectStation(null);
@@ -272,12 +349,13 @@
     }
     $('motion').onclick=()=>{playing=!playing;campus?.setPlaying?.(playing);territory?.setPlaying?.(playing);showMotion();};
     showMotion();
-    modeButtons.forEach(btn => btn.onclick = () => {if(observing)clearObservation();changeMode(btn.dataset.twinMode);});
+    modeButtons.forEach(btn => btn.onclick = () => {if(layoutActive)campus?.setLayoutView(false);if(observing)clearObservation();changeMode(btn.dataset.twinMode);});
     objectButtons.forEach(btn => btn.onclick = () => {
       if (mode === 'territory') changeMode('campus');
       if(observing)clearObservation();
       selectCampus(btn.dataset.object);
       if(btn.dataset.object==='power')observe('sub-transformer');
+      if(btn.dataset.object==='cooling')observe('cooling');
     });
     for (const btn of document.querySelectorAll('[data-camera]')) btn.onclick = () => {
       const view = mode === 'territory' ? territory : campus;
@@ -293,8 +371,8 @@
     });
     let beforeInspection;
     return {
-      observe, getShareHash(){return observing?'#twin/device/'+observing.key:rackState?'#twin/rack':'#twin';},
-      openRack() {if(observing)clearObservation(false);changeMode('cutaway');campus?.openRack();},
+      observe,openLayout,startPowerTour:()=>tour.start(),getShareHash(){return observing?'#twin/device/'+observing.key:tour.getState().active?'#twin/tour':layoutActive?'#twin/layout':rackState?'#twin/rack':'#twin';},
+      openRack() {stopForInspection();if(observing)clearObservation(false);changeMode('cutaway');campus?.openRack();},
       async focusEquipment(key) {
         beforeInspection ??= campus?.getViewState?.();
         if(expanded())exitExpanded();
@@ -304,7 +382,7 @@
         const view=campus?.getViewState?.();
         return mode==='cutaway' && view?.hallNumber ? '机房 '+String(view.hallNumber).padStart(2,'0') : (mode==='cutaway'?'机房剖视':'园区');
       },
-      suspendForInspection() { guide.pause?.();overlay.setPlaying(false);campus?.setPlaying?.(false); territory?.setPlaying?.(false); },
+      suspendForInspection() { stopForInspection();guide.pause?.();overlay.setPlaying(false);campus?.setPlaying?.(false); territory?.setPlaying?.(false); },
       resumeFromInspection() {
         if(beforeInspection)campus?.restoreViewState?.(beforeInspection);
         beforeInspection=null;if(rackState)guide.update(rackState);overlay.setPlaying(playing);
@@ -312,6 +390,7 @@
       },
       update(nextProject) {
         active = true;
+        if(tour.getState().active&&tourConfig!==geometryConfig(nextProject))tour.close();
         const projectChanged = project?.id !== nextProject.id;
         project = nextProject;
         if(projectChanged&&observing)clearObservation(false);
@@ -335,6 +414,8 @@
         if(observing && JSON.stringify(configForDevice())!==observationConfig)observe(observing.key);
       },
       pause() {
+        tour.close();
+        if(layoutActive)campus?.setLayoutView(false);
         clearObservation(false);guide.pause?.();active = false; beforeInspection=null;
         if (expanded()) exitExpanded();
         request?.abort();

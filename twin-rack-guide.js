@@ -2,13 +2,13 @@
 ((root) => {
   'use strict';
 
-  function makeSteps(rack, trace) {
+  function makeSteps(rack, trace, branch) {
     const {rowdist, pdu, module, bus, servers} = trace;
     const pcie = rack.profile === 'pcie';
     const multiple = servers.length > 1;
     const destination = multiple ? servers.length + ' 个计算托盘' : servers[0].label;
     const destinationId = multiple ? servers[0].id + ' … ' + servers[servers.length - 1].id : servers[0].id;
-    return [
+    const steps = [
       {key:'rowdist', tab:'列头柜', name:rowdist.label, id:rowdist.id,
         text:'列头柜把一列机柜需要的电分成多条支路。沿 ' + module.feed + ' 路，可以从这里追到当前柜的' + (rack.isDC ? '直流分配装置。' : '电源分配单元。')},
       {key:'pdu', tab:'机架配电', name:pdu.label, id:pdu.id,
@@ -20,6 +20,14 @@
       {key:'servers', tab:pcie ? '服务器' : '计算托盘', name:destination, id:destinationId,
         text:pcie ? '这条支路通过本机背板给' + destination + '供电，服务器用这些电驱动 CPU、GPU 和其他板上器件。' : '这 ' + servers.length + ' 个计算托盘都从同一组母排取电。一个电源模块的输出可以由多个托盘共享，托盘上的 CPU 和 GPU 用这些电完成计算。'}
     ];
+    if(branch){
+      const {server,gpu}=branch;
+      steps[4]={key:'server',tab:pcie?'服务器':'计算托盘',name:server.label,id:server.id,
+        text:(pcie?'本机电源背板为':'沿共用母排的一条支路给')+server.label+'供电。板卡向前展开，显示'+(pcie?'本机 '+rack.perServer+' 张单 GPU PCIe 卡。':'本托盘的 4 颗 GPU。')+'线条表示装回后的供电关系。'};
+      steps.push({key:'gpu',tab:'GPU',name:server.label+' · '+gpu.label,id:gpu.id,
+        text:'在机柜 '+rack.id+' 中，'+server.label+'的板级稳压电路给 '+gpu.label+' 供电。芯片使用这些电执行计算。'});
+    }
+    return steps;
   }
 
   function mount(host, options = {}) {
@@ -186,8 +194,9 @@
       const slotChanged = rackChanged || trace?.module.id !== newTrace?.module.id;
       const extracted = Boolean(next.extracted);
       const newlyExtracted = extracted && !state?.extracted;
-      const stepChanged = next.step !== state?.step;
-      if (slotChanged || (!next.doorOpen && state?.doorOpen)) stop();
+      const branchChanged = next.journey !== state?.journey || next.serverNumber !== state?.serverNumber || next.gpuNumber !== state?.gpuNumber;
+      const stepChanged = next.step !== state?.step || branchChanged;
+      if (slotChanged || branchChanged || (!next.doorOpen && state?.doorOpen)) stop();
       state = {...next, extracted};
       trace = newTrace;
       rackSignature = signature;
@@ -227,7 +236,9 @@
         el.summary.textContent = '机柜示意范围';
         return;
       }
-      steps = makeSteps(rack,trace);
+      const branch=next.journey?root.GridRackCircuit.branch(rack,{slot:trace.module.slot,serverNumber:next.serverNumber,gpuNumber:next.gpuNumber}):null;
+      steps = makeSteps(rack,trace,branch);
+      current=Math.min(current,steps.length-1);
       const sceneIndex = steps.findIndex(s => s.key === next.step);
       if (sceneIndex >= 0 && (stepChanged || slotChanged)) {
         if (speaking && sceneIndex !== current) stop();

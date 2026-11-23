@@ -6,19 +6,27 @@
   const zoneNames = {it:'数据机房', cooling:'冷却机组', power:'供配电区'};
   const pickKeys=[...zones,'rack','ups','sst','hvdc','transformer','liquid','air','switchgear'];
   pickKeys[12]='800v';pickKeys[13]='rowdist';pickKeys[14]='pdu';pickKeys[15]='psu';pickKeys[23]='fan';pickKeys[24]='network';pickKeys[25]='door';pickKeys[26]='server';pickKeys[27]='bus';pickKeys[28]='cable';pickKeys[29]='sub-incoming';pickKeys[30]='sub-transformer';pickKeys[31]='sub-switchgear';pickKeys[32]='sub-feeder';pickKeys[33]='sub-transformer-2';pickKeys[34]='sub-transformer-3';pickKeys[35]='sub-transformer-4';pickKeys[20]='rack:gb200';pickKeys[21]='rack:gb300';pickKeys[22]='rack:pcie';
+  // Standalone facility groups use the red pick channel. Keep 16–19 for halls and existing equipment IDs intact.
+  const firstCoolingPick=36,maxCoolingUnits=14;
+  for(let i=0;i<maxCoolingUnits;i++)pickKeys[firstCoolingPick+i]='cooling-unit-'+(i+1);
+  const isCoolingPick=id=>id>=firstCoolingPick&&id<firstCoolingPick+maxCoolingUnits;
   const rackTypes={gb200:['GB200','#75daca'],gb300:['GB300','#e7b172'],pcie:['PCIe','#85b8e3']};
   const equipmentTitles={rowdist:'列头配电',pdu:'机柜配电',psu:'机柜 PSU',fan:'EC 风扇',network:'ToR 交换机','800v':'800 V 直流柜',rack:'IT 机柜',ups:'UPS 电源柜',sst:'SST 变换柜',hvdc:'直流电源柜',transformer:'隔离变压器',liquid:'液冷 CDU',air:'机房风冷',switchgear:'配电柜'};
   const circuitIds={all:0,power:1,liquid:2,air:3,data:4,none:5};
-  const family=(id)=>id<=3?id:id===4||id===24||(id>=20&&id<=22)?1:id===9||id===10||id===23?2:3;
+  const family=(id)=>id<=3?id:id===4||id===24||(id>=20&&id<=22)?1:id===9||id===10||id===23||isCoolingPick(id)?2:3;
   const pickKey=id=>id>=16&&id<20?'hall-'+(id-16):pickKeys[id]||null;
   const positive=(v,fallback)=>Number.isFinite(Number(v))&&Number(v)>0?Number(v):fallback;
+  function coolingUnitCount(config={}){
+    const facility=positive(config?.it,100)*positive(config?.pue,1.25);
+    return 2*clamp(Math.round(3+Math.log2(facility/40)),2,maxCoolingUnits/2);
+  }
   function campusPlan(metrics,it,density){
     const l=metrics.layout||{},racks=Math.max(1,Math.ceil(positive(l.racks,positive(metrics.racks,it*1000/density))));
     const perHall=Math.max(1,Math.ceil(positive(l.racksPerHall,Math.min(racks,256))));
     const halls=Math.max(1,Math.ceil(positive(l.halls,Math.ceil(racks/perHall))));
     const last=Math.min(perHall,Math.max(1,Math.ceil(positive(l.lastHallRacks,racks-(halls-1)*perHall))));
     const widthM=positive(l.hallWidthM,Math.sqrt(Math.max(20,perHall*3.4)/1.65)),lengthM=positive(l.hallLengthM,widthM*1.65);
-    const displayed=Math.min(halls,4),gap=3.45,capacity=79-gap*(displayed-1);
+    const displayed=Math.min(halls,4),gap=3.45,capacity=77.5-gap*(displayed-1);
     const factor=Math.min(1.16,capacity/(widthM*displayed),53/lengthM);
     const dims=Array.from({length:displayed},(_,i)=>{
       const index=displayed<halls&&i===displayed-1?halls-1:i,installed=index===halls-1?last:perHall;
@@ -142,7 +150,12 @@
     const plan=campusPlan(metrics,it,density),halls=plan.dims.length,baseHeight=8.8+Math.min(2,Math.log10(it+1)*.66);
     const m=meshBuilder(),{box,prism,rect,polygon,shadow,beam,cylinder,circle,face}=m;
     const site=[[-75,-42],[-72,-45],[71,-45],[75,-41],[75,42],[71,46],[-72,46],[-75,42]];
-    const anchors={},routes=[];
+    const anchors={},routes=[],layout={boundary:site,roads:[],buildings:[],equipment:[],trees:[],parking:[],curbs:[],posts:[],utilities:[]};
+    const rectFootprint=(id,x,y,w,d)=>({id,x0:x,y0:y,x1:x+w,y1:y+d});
+    function road(id,x,y,w,d){
+      layout.roads.push(rectFootprint(id,x,y,w,d));
+      rect(x,y,w,d,.105,'#45545d');
+    }
     const mix=Array.isArray(project.rackMix)?project.rackMix.filter(r=>rackTypes[r?.profile]&&positive(r.count,0)>0):[];
     const shownRacks=plan.dims.reduce((total,h)=>total+h.symbols,0);let drawnRacks=0;
     m.group('none');
@@ -155,13 +168,20 @@
     box(-65,-36,.09,86,64,.30,'#9ca5a3','#9ba6a2');
     box(27,-36,.09,37,32,.30,'#97a3a1','#9ba7a3');
     box(27,1,.09,37,27,.30,'#94a0a0','#97a19f');
-    rect(-69,32,138,4,.1,'#45545d');
+    road('north-ring',-70,-41,140,5);road('west-ring',-70,-36,5,68);
+    road('east-ring',64,-36,6,68);road('south-ring',-70,32,140,4);
+    road('central-service',21,-36,6,68);road('plant-cross',27,-4,37,5);
+    road('south-gate',15.7,36,7.1,10);
     for(let i=-66;i<65;i+=6) {
       rect(i,33.92,2.8,.16,.13,'#a8b4b5');
       rect(i,-39.6,2.8,.15,.13,'#a8b4b5');
     }
     for(let y=-36;y<32;y+=6){rect(67.2,y,.14,2.6,.13,'#a8b4b5');rect(-68.1,y,.14,2.6,.13,'#a8b4b5');}
-    for(let x=-66;x<60;x+=10){box(x,42.1,.07,8.4,1,.25,'#6a797c','#849894');}
+    for(let x=-66;x<60;x+=10){
+      const width=x<15?Math.min(8.4,15-x):8.4;
+      if(x>=15&&x<24)continue;
+      box(x,42.1,.07,width,1,.25,'#6a797c','#849894');layout.curbs.push(rectFootprint('perimeter-curb',x,42.1,width,1));
+    }
     const clipped=(x,y,w,d,c=.55)=>[[x+c,y],[x+w-c,y],[x+w,y+c],[x+w,y+d-c],[x+w-c,y+d],[x+c,y+d],[x,y+d-c],[x,y+c]];
     // Pedestrian and perimeter details provide an architectural scale reference.
     let prng=27;
@@ -169,6 +189,7 @@
     function tree(x,y,scale=1){
       const h=(3.6+random()*1.3)*scale,r=(1.25+random()*.46)*scale;
       polygon(circle(x+.65,y+.42,r*1.16,9),.16,'#536766');
+      layout.trees.push(rectFootprint('trunk',x-.18,y-.18,.36,.36));
       cylinder(x,y,.15,.18,h*.63,'#697164','#7d8271',6);
       const palettes=['#4d7d67','#569477','#527e72','#83a280'];
       function crown(cx,cy,cz,rad,tall,tint){
@@ -179,26 +200,32 @@
       crown(x,y,h*.69,r*.95,h*.38,Math.floor(random()*3));crown(x-r*.51,y+r*.11,h*.61,r*.62,h*.25,0);
       crown(x+r*.40,y-r*.31,h*.65,r*.65,h*.29,1);
     }
-    for(let x=-63;x<=65;x+=7.1)tree(x,39.4,.87+random()*.2);
+    for(let x=-63;x<=65;x+=7.1)if(x<13||x>30)tree(x,39.4,.87+random()*.2);
     for(let x=-61;x<65;x+=9)tree(x,-42.3,.74);
     for(let y=-29;y<=26;y+=9)tree(-72.25,y,.84);
     function fence(x1,y1,x2,y2,count){
-      for(let i=0;i<=count;i++){const t=i/count;box(x1+(x2-x1)*t-.075,y1+(y2-y1)*t-.075,.12,.15,.15,1.65,'#96a5a7');}
+      for(let i=0;i<=count;i++){
+        const t=i/count,x=x1+(x2-x1)*t-.075,y=y1+(y2-y1)*t-.075;
+        layout.posts.push(rectFootprint('fence-post',x,y,.15,.15));box(x,y,.12,.15,.15,1.65,'#96a5a7');
+      }
       for(const h of [.82,1.7])beam([x1,y1,h],[x2,y2,h],.055,'#809298',4);
     }
     fence(-72,-42,72,-42,38);fence(72,-42,72,42,21);fence(-72,-42,-72,41,21);fence(-71,43,15,43,23);fence(24,43,70,43,12);
     for(let x=17;x<24;x+=.85)rect(x,32.3,.38,3.3,.16,'#bfc7c1');
+    layout.buildings.push(rectFootprint('gatehouse',23.1,37.50,4.5,3.35));
     box(23.4,37.8,.12,3.9,2.8,2.45,'#aab9c0','#cfdbd9');box(23.4,40.59,1.15,3.9,.09,1.0,'#395661');box(23.1,37.5,2.55,4.5,3.35,.2,'#b2c5c8','#dfeded');
-    for(let x=-61;x<65;x+=20){
+    for(const x of [-61,-41,-21,-1,24.6,39,59]){
+      layout.posts.push(rectFootprint('light-pole',x-.16,36.44,.32,.32));
       cylinder(x,36.6,.13,.16,4.9,'#657a80','#a6b2ae',6);beam([x,36.6,4.9],[x,35,5.36],.12,'#9aacac');
       box(x-.22,34.65,5.22,.44,.9,.16,'#495c67','#c4d0c9');rect(x-.17,34.7,.34,.75,5.23,'#ffe3a3');
     }
     for(let j=0;j<8;j++){const px=-61+j*3.9;rect(px,28.1,.14,3.0,.13,'#a7b2aa');}
     for(const [px,py,tone] of [[-56,28.3,'#c8d1cd'],[-42,28.3,'#6d8994'],[34,36.4,'#c4cdc8']]){
+      layout.parking.push(rectFootprint('parked-car',px-.05,py,1.77,3.5));
       box(px,py,.18,1.72,3.5,.57,'#546674',tone);box(px+.16,py+.6,.74,1.39,1.92,.46,'#4a6a79',tone);
       box(px-.05,py+.35,.17,.17,.62,.34,'#33444a');box(px-.05,py+2.54,.17,.17,.62,.34,'#33444a');
     }
-    // Three parallel hall blocks in the reference scheme. Visible halls are capacity bands, not a construction schedule.
+    // Representative halls retain the selected scheme's rack count and room order.
     m.group('it');
     const pad=.9,w=25,y=-31,d=54;
     function roofFan(x,y,z,wide){
@@ -222,6 +249,7 @@
       const mark=(key,pos)=>{hall.points[key]=m.world(pos);};
       m.part(0,b);
       shadow(x-.4,y-.4,w+.8,d+.8,height,.42,'#687a7f');
+      const envelopeStart=m.faces.length;
       prism(clipped(x-pad,y-pad,w+2*pad,d+2*pad),.43,.41,'#7c8b90','#b2bdba');
       prism(clipped(x,y,w,d),floor,.9,'#485f70','#83989e');
       {
@@ -277,6 +305,7 @@
         }
         // Raised spine, skylight panes and regular joints.
         box(x+w*.45,y+2.0,roof+.34,w*.10,d-4,1.08,'#889ba4','#acbdc3');
+        hall.roofAnchor=m.world([x+w*.50,y+d*.50,roof+1.43]);
         for(let j=0;j<9;j++)rect(x+w*.456,y+3.0+j*5.3,w*.084,3.7,roof+1.43,'#83afb5');
         for(let j=0;j<3;j++){
           const panelY=y+3+j*16;
@@ -292,6 +321,12 @@
           box(xx,y+d+.15,floor+1.0,.19,.38,4.07,'#c6d0d0','#d8e2df');
         }
       }
+      const envelope={id:'hall-'+b,x0:Infinity,y0:Infinity,x1:-Infinity,y1:-Infinity};
+      for(let j=envelopeStart;j<m.faces.length;j++)for(const [px,py] of m.faces[j].points){
+        envelope.x0=Math.min(envelope.x0,px);envelope.y0=Math.min(envelope.y0,py);
+        envelope.x1=Math.max(envelope.x1,px);envelope.y1=Math.max(envelope.y1,py);
+      }
+      layout.buildings.push(envelope);
       {
         m.part(3,b);
         rect(x+.26,y+.26,w-.52,d-.52,floor+.94,'#607a89');
@@ -322,7 +357,7 @@
               for(let z=0;z<5;z++)box(dx+.22,dy+dd+.13,bz+.46+z*.40,ww-.44,.08,.14,'#b39b77');
               hall.rowSources[q]={pos:m.world([dx+ww*.5,dy+dd*.55,bz+3.2])};
             }
-            if(q===demoLane&&j===demoRow){mark('rack',at);hall.rackType=style?profile:null;demo={xx,yy,depth:rackD,id};}
+            if(q===demoLane&&j===demoRow){mark('rack',at);hall.rackType=style?profile:null;hall.demoRackIndex=id;demo={xx,yy,depth:rackD,id};}
             m.part(4,b,id);m.group(rackKey);
             box(xx,yy,floor+.96,rackW,rackD,3.15,'#2e4959','#6c858e');
             box(xx+.15,yy-.02,floor+2.98,rackW-.3,.09,.12,'#63c4c5');
@@ -366,12 +401,18 @@
         ];
         if(config.cooling!=='风冷')cells.push(['liquid',10.05,15.55,6.6,5.15]);
         for(const [key,px,py,bw,bd] of cells){
-          m.group(key);box(px-.16,py-.16,z+.16,bw+.32,bd+.32,.36,'#607178','#a1aeae');
+          m.group(key);
+          if(key===(config.cooling==='风冷'?'air':'liquid')){
+            hall.facilityWater=[-.30,.30].map(delta=>m.world([px+bw*.50+delta,py+bd+.12,z+2.05]));
+            for(const delta of [-.30,.30])beam([px+bw*.50+delta,py+bd,z+2.05],[px+bw*.50+delta,py+bd+.12,z+2.05],.13,'#7faaa8',6);
+          }
+          box(px-.16,py-.16,z+.16,bw+.32,bd+.32,.36,'#607178','#a1aeae');
           if(key==='transformer'){
             box(px+.49,py+.32,z+.53,bw-.98,bd-.64,2.15,'#748c92','#aab3ae');
             for(let j=0;j<7;j++)box(px,py+.32+j*.57,z+.70,bw,.18,1.85,'#8c9f9c','#bcc7bc');
             for(let j=0;j<3;j++){const xx=px+bw*(j+.5)/3;cylinder(xx,py+bd*.50,z+2.67,.22,1.26,'#8f8273','#b9af91',9);
-              for(let k=0;k<3;k++)cylinder(xx,py+bd*.50,z+2.9+k*.3,.36,.13,'#a09279','#c4b89c',9);}
+              for(let k=0;k<3;k++)cylinder(xx,py+bd*.50,z+2.9+k*.3,.36,.13,'#a09279','#c4b89c',9);
+              cylinder(xx,py+1.30,z+2.67,.21,.58,'#809497','#bcbbb0',8);cylinder(xx,py+1.30,z+3.03,.28,.10,'#98a8a8','#bec3b9',8);}
           }else if(key==='liquid'){
             box(px,py,z+.53,bw,bd,2.9,'#558a93','#98b8b2');
             for(let j=0;j<2;j++){const xx=px+1.35+j*3.03;
@@ -489,10 +530,33 @@
           ladder(powerX,tapY,powerX,fromRowY,tHigh-.22,.33,'#a49881');
           ladder(dataX,netY,dataX,opticY+.92,tHigh+.36,.29,'#8b9aab');
           // Two continuous adjacent feeders branch at the overhead tap, then descend to the two rack strips.
-          const head=conversion==='sst'?[[11.9,10.3,z+3.84],[11.9,10.3,tHigh],[20.2,10.3,tHigh]]:
-            [[11.9,10.3,z+3.84],[11.9,10.3,tHigh],[3.8,10.3,tHigh],[3.8,trunkY,tHigh],[20.2,trunkY,tHigh],[20.2,10.3,tHigh]];
-          m.trace([...head,[20.2,10.3,z+3.94]],9,.14,'#bc985f');
-          m.trace([[19.5,9.5,z+3.96],[19.5,9.5,tHigh+.22],[19.5,trunkY,tHigh+.22],[fromRowX,trunkY,tHigh+.22],[fromRowX,fromRowY,tHigh+.22],[fromRowX,fromRowY,rowTop+.04]],9,.15,'#cfad77');
+          const paths={conversion,rackIndex:demo.id},port=(p)=>m.world(p);
+          hall.powerPaths=paths;
+          // Local cable centerlines feed both the solid geometry and the journey. Internal passages are separate.
+          function powerCable(key,points,radius,tone){
+            m.trace(points,9,radius,tone);paths[key]=points.map(port);
+          }
+          const wall=[24.19,y+d+.06,z+.82],elbow=[24.19,21.89,z+.82],ceiling=tHigh+.72;
+          const incomer=[11.42,10.78,z+3.86],out=[11.90,10.3,z+3.84],primary=[3.90,10.40,z+3.93],secondary=[3.90,9.30,z+3.25];
+          const convertIn=[20.2,10.3,z+3.94],convertOut=[19.5,9.5,z+3.96],rowIn=[fromRowX,fromRowY,rowTop+.04];
+          paths.entry=port(wall);paths.switchInside=[incomer,[11.42,10.65,z+3.14],[11.9,10.3,z+3.14],out].map(port);
+          box(23.82,y+d-.16,z+.38,.73,.36,.86,'#697d84','#a1adb0');
+          ladder(24.19,21.89,24.19,13.64,ceiling-.23,.30,'#88959a');ladder(24.19,13.64,11.42,13.64,ceiling-.23,.30,'#88959a');
+          powerCable('roomIn',[wall,elbow,[24.19,21.89,ceiling],[24.19,13.64,ceiling],[11.42,13.64,ceiling],[11.42,10.78,ceiling],incomer],.13,'#a99c79');
+          if(conversion==='sst'){
+            powerCable('toConverter',[out,[out[0],out[1],tHigh],[20.2,10.3,tHigh],convertIn],.14,'#bc985f');
+          }else{
+            powerCable('toTransformer',[out,[out[0],out[1],tHigh],[3.90,10.3,tHigh],[3.90,10.40,tHigh],primary],.14,'#bc985f');
+            paths.transformerInside=[primary,[primary[0],primary[1],z+2.03],[secondary[0],secondary[1],z+1.85],secondary].map(port);
+            powerCable('toConverter',[secondary,[3.90,9.30,tHigh],[3.90,trunkY,tHigh],[20.2,trunkY,tHigh],[20.2,10.3,tHigh],convertIn],.14,'#bc985f');
+          }
+          paths.converterInside=[convertIn,[20.2,10.3,z+2.84],[19.5,9.5,z+2.84],convertOut].map(port);
+          powerCable('rowInput',[convertOut,[19.5,9.5,tHigh+.22],[19.5,trunkY,tHigh+.22],[fromRowX,trunkY,tHigh+.22],[fromRowX,fromRowY,tHigh+.22],rowIn],.15,'#cfad77');
+          const rowSource=hall.rowSources[demoLane].pos;paths.rowOutputs={};
+          for(const feed of ['A','B']){
+            const output=[rowSource[0]+(feed==='A'?-.075:.075),rowSource[1],rowSource[2]+.035];
+            paths.rowOutputs[feed]=[port(rowIn),[output[0],output[1],output[2]-.12*hall.sz],output];
+          }
           for(const [sign,rail] of [[-1,pA],[1,pB]]){
             const lateral=powerX+sign*.12,off=sign*.15;
             m.trace([[fromRowX+off,fromRowY,rowTop+.04],[fromRowX+off,fromRowY,tHigh],[lateral,fromRowY,tHigh],[lateral,tapY,tHigh],[lateral,tapY,tHigh-.66],[rail,tapY,tHigh-.66],[rail,pY,tHigh-.66],[rail,pY,rTop+.23]],9,.095,sign<0?'#d4af71':'#a98e6c');
@@ -523,15 +587,19 @@
       }
     }
     m.setTransform(null);m.part(0);
-    const middle=plan.dims[Math.floor((halls-1)/2)];anchors.it=[middle.center[0],middle.center[1],baseHeight+3];
+    const middle=plan.dims[Math.floor((halls-1)/2)];anchors.it=middle.roofAnchor;
     // Plant yard: fan openings, service panels, piping, physically separate from the hall roofs.
     m.group('cooling');
-    const chillCount=clamp(Math.round(3+Math.log2((it*pue)/40)),2,7);
+    const chillCount=coolingUnitCount(config)/2,coolingBounds={};
     const chW=29/chillCount-1.1,chD=10.7;
     for(let r=0;r<2;r++)for(let j=0;j<chillCount;j++){
-      const x=29+j*(chW+1.1),y=-33+r*13;
-      shadow(x,y,chW,chD,3.2,.42,'#687c81');
-      box(x-.2,y-.2,.43,chW+.4,chD+.4,.48,'#74848a','#a8b7b8');
+      const x=29+j*(chW+1.1),y=-33+r*13,key='cooling-unit-'+(r*chillCount+j+1);
+      // Center of the first fan hub is on the rendered unit and remains distinct from its neighbors.
+      anchors[key]=[x+chW/2,y+2.72,4.50];
+      coolingBounds[key]={min:[x-.2,y-.2,.43],max:[x+chW+.2,y+chD+.2,4.50]};
+layout.equipment.push(rectFootprint('chiller-'+r+'-'+j,x-.20,y-.20,chW+.40,chD+.40));
+      m.group('none');shadow(x,y,chW,chD,3.2,.42,'#687c81');
+      m.group(key);box(x-.2,y-.2,.43,chW+.4,chD+.4,.48,'#74848a','#a8b7b8');
       box(x,y,.91,chW,chD,3.0,'#91a4a8','#bdcbc9');
       box(x-.05,y+chD-.08,3.38,chW+.1,.20,.42,'#b89068','#d6ab79');
       for(let i=0;i<7;i++){const yy=y+.45+i*1.42;box(x-.04,yy,1.32,.12,.57,1.94,'#607881');}
@@ -549,43 +617,121 @@
         cylinder(cx,cy,4.35,rad*.22,.15,'#97afb2','#c0d0ce',10);
       }
     }
-    for(const [i,col] of ['#789c9c','#c79e70'].entries()){
-      beam([30,-5.5+i,1.05],[60,-5.5+i,1.05],.31,col,8);
-      beam([60,-5.5+i,1.05],[60,-32,1.05],.31,col,8);
+    m.group('cooling');
+    const headers=[];
+    function utility(id,kind,points,radius,hex,animated=false){
+      layout.utilities.push({id,kind,points,radius});
+      if(animated)m.trace(kind==='return'?[...points].reverse():points,kind==='return'?12:kind==='power'?9:10,radius,hex);
+      else for(let j=1;j<points.length;j++)beam(points[j-1],points[j],radius,hex,6);
     }
-    if(config.cooling==='风冷')for(let j=0;j<2;j++)box(59,-29+j*7,.45,2.8,5.3,3.0,'#879ba6','#bbcacb');
-    if(config.cooling==='冷板液冷')for(let j=0;j<3;j++)cylinder(60,-30+j*6,1,1.65,3.9,'#7b9ca5','#bfcecf',16);
+    // Supply and return remain separate on the west side of the plant. Short branches land on individual units.
+    for(let side=0;side<2;side++){
+      const kind=side?'return':'supply',tone=side?'#ae92a2':'#78aaa9',hx=27.47+side*.57,z=1.29+side*.36;
+      const header=[hx,-5.33-side*.62,z];headers.push(header);
+      utility('plant-'+kind,kind,[[hx,-33+chD+.52+side*.45,z],header],.16,tone);
+      for(let row=0;row<2;row++){
+        const y=-33+row*13,front=y+chD,manifold=front+.52+side*.45;
+        const end=29+(chillCount-1)*(chW+1.1)+chW*.40+side*.36;
+        utility('header-'+kind+'-'+row,kind,[[hx,manifold,z],[end,manifold,z]],.13,tone);
+        for(let j=0;j<chillCount;j++){
+          const branchX=29+j*(chW+1.1)+chW*.40+side*.36;
+          utility('chiller-port-'+kind+'-'+row+'-'+j,kind,[[branchX,manifold,z],[branchX,front,z]],.087,tone);
+        }
+      }
+    }
+    if(config.cooling==='风冷')for(let j=0;j<2;j++){
+      const y=-29+j*7;layout.equipment.push(rectFootprint('air-aux-'+j,59,y,2.8,5.3));
+      box(59,y,.45,2.8,5.3,3.0,'#879ba6','#bbcacb');
+    }
+    if(config.cooling==='冷板液冷')for(let j=0;j<3;j++){
+      const y=-30+j*6;layout.equipment.push(rectFootprint('water-tank-'+j,58.35,y-1.65,3.3,3.3));
+      cylinder(60,y,1,1.65,3.9,'#7b9ca5','#bfcecf',16);
+    }
     anchors.cooling=[44,-20,5.0];
     const yardUnits=clamp(Math.round(2+Math.log2((Number(metrics.facility)||it*pue)/80)),2,4);
-    GridYard.build(m,anchors,yardUnits);
-    // Illuminated service corridors illustrate flow within the project boundary.
-    // These are conceptual routes, with direction and motion driven by scenario load.
-    const circuits=[
-      {points:[[42,23.2],[42,29.4],[7,29.4],[7,24.2]],tone:'#4c8a87',glow:'#86efe0'},
-      {points:[[44,-6],[23,-6],[23,25.9],[-46,25.9],[-46,23.4]],tone:'#948263',glow:'#ffd38b'}
-    ];
-    for(const route of circuits){
-      m.group('none');
-      const points=route.points.map(([x,y])=>[x,y,.75]);
-      const isPower=route===circuits[0],dest=middle.center[0];
-      const routePoints=isPower?[[42,23.2,.75],[42,29.4,.75],[dest,29.4,.75],[dest,middle.y+middle.d,.75]]:
-        [[44,-6,.75],[23,-6,.75],[23,26,.75],[dest+2,26,.75],[dest+2,middle.y+middle.d,.75]];
-      if(isPower||config.cooling!=='风冷')m.trace(routePoints,isPower?9:10,.28,isPower?'#a38b68':'#6d9c9a');
-      routes.push({points,color:route.glow});
+    const yard=GridYard.build(m,anchors,yardUnits,halls);layout.station=rectFootprint('substation',29,2.6,33,24);
+    layout.equipment.push(...yard.footprints);
+    // The north–south service road is crossed in sleeves below its paving. Both shoulders remain clear.
+    const ductY=25.78,ductStep=.47;
+    m.part(0);m.group('none');
+    for(let i=0;i<halls;i++){
+      const hall=plan.dims[i],path=hall.powerPaths,feederIndex=halls-1-i,feeder=yard.feeders[feederIndex],terminal=feeder.terminal,wall=path.entry;
+      path.feederIndex=feederIndex;
+      const laneY=ductY+feederIndex*ductStep,riser=[wall[0],wall[1]+.50,1.36],depth=-.68;
+      const enter=[27.55,laneY,depth],exit=[20.45,laneY,depth];
+      const before=[terminal,[terminal[0],24.81,1.41],[terminal[0],laneY,1.36],[27.70,laneY,1.36],enter];
+      const sleeve=[enter,exit],after=[exit,[20.27,laneY,1.36],[riser[0],laneY,1.36],riser,[riser[0],riser[1],wall[2]],wall];
+      path.outdoorSections=[before,sleeve,after];
+      for(const [j,points] of path.outdoorSections.entries())utility('feeder-'+i+'-'+j,'power',points,.13,'#ab9670',true);
+      for(const x of [20.12,27.42])rect(x,laneY-.16,.38,.32,.43,'#b69b78');
+      for(const [xMin,xMax] of [[riser[0],20.0],[27.94,terminal[0]]]){
+        for(let x=xMin+2.5;x<xMax;x+=7.5)box(x-.09,laneY-.18,1.18,.18,.36,.18,'#707f84','#bac5bd');
+      }
+      routes.push({points:[...before,...after],color:'#ffd38b'});
     }
-    const model={plan,vertices:new Float32Array(m.buffer),faces:m.faces,anchors,routes};
+    // One facility-water pair per scheme, branching from the common trunks into each hall gallery.
+    // The rack-secondary CDU loop is generated separately inside the hall.
+    for(let side=0;side<2;side++){
+      const kind=side?'return':'supply',tone=side?'#a88d9d':'#6d9c9a',head=headers[side];
+      const y=head[1],depth=-.78,west=19.72+side*.55,frontY=24.76+side*.48,z=.71+side*.31;
+      const destinations=plan.dims.map(h=>h.facilityWater[side]);
+      const trunk=[[head[0],y,head[2]],[27.43,y,depth],[20.57,y,depth],[west,y,z],[west,frontY,z],[Math.min(...destinations.map(p=>p[0])),frontY,z]];
+      utility('facility-'+kind,kind,trunk,.105,tone,true);routes.push({points:trunk,color:side?'#d8abba':'#86efe0'});
+      for(let i=0;i<halls;i++){
+        const hall=plan.dims[i],dst=destinations[i],edgeY=hall.y+hall.d+.15;
+        const branchR=Math.min(.095,Math.abs(hall.facilityWater[1][0]-hall.facilityWater[0][0])*.32);
+        const outdoor=[[dst[0],frontY,z],[dst[0],edgeY,z],[dst[0],edgeY,dst[2]]];
+        utility('hall-water-'+kind+'-'+i,kind,outdoor,branchR,tone,true);
+        m.part(3,i);m.group(config.cooling==='风冷'?'air':'liquid');
+        utility('hall-water-port-'+kind+'-'+i,kind,[outdoor.at(-1),dst],branchR,tone,true);
+        m.part(0);m.group('none');
+      }
+    }
+    const model={plan,layout,coolingBounds,vertices:new Float32Array(m.buffer),faces:m.faces,anchors,routes};
+    model.getPowerTour=(options={},openIndex=0)=>{
+      const index=clamp(Number.isInteger(openIndex)?openIndex:0,0,halls-1),hall=plan.dims[index],p=hall.powerPaths;
+      const branchIndex=clamp(Math.trunc(Number(options.yardUnit)||1)-1,0,yard.transformers.length-1);
+      const main=yard.transformers[branchIndex],feeder=yard.feeders[p.feederIndex],rack=hall.rackPoints[p.rackIndex];
+      const profile=rack.key.split(':')[1]||project.rackStudy?.profile||'gb200';
+      const modules=profile==='pcie'?2*Math.min(4,project.rackStudy?.servers||6):4;
+      const slot=clamp(Math.trunc(Number(options.slot)||(options.feed==='B'?2:1)),1,modules),feed=slot%2?'A':'B';
+      const ac=p.conversion==='ups',titles={ups:'交流 UPS',sst:'SST 800 V 直流变换柜','800v':'800 V 集中整流柜',hvdc:'集中式 HVDC 柜'};
+      const stops=[],segment=(kind,points)=>({kind,points});
+      function stop(key,title,text,scope,segments){
+        const points=[];
+        for(const block of segments)for(const point of block.points){
+          const last=points.at(-1);
+          if(!last||Math.hypot(...difference(point,last))>.000001)points.push(point);
+        }
+        stops.push({key,title,text,scope,segments,points,point:points.at(-1)});
+      }
+      const cable=pts=>segment('cable',pts),enclosed=pts=>segment('enclosed',pts),transfer=pts=>segment('transfer',pts);
+      stop('sub-incoming','站内进线端子','从园区内的进线端子出发。画面跟随三相导体中的一相，其他两相并列布置。','yard',[cable(yard.incoming)]);
+      stop(main.key,(branchIndex+1)+' 号主变压器','沿所选主变的一次引线到高压套管。一次与二次绕组通过磁场传能，穿过变压器的段落表示能量转换。','yard',[cable(main.primary),transfer(main.coupling)]);
+      const end=main.secondary.at(-1),inputBus=main.bus;
+      stop('sub-switchgear','站内中压开关设备','二次侧引线从套管下引，沿槽道接入这台主变对应的进线间隔，再进入封闭母线。壳内按中心线示意。','yard',[cable(main.secondary),enclosed([end,[inputBus[0],inputBus[1],2.53],inputBus])]);
+      stop('sub-feeder','机房 '+(hall.index+1)+' 的站内馈线','沿站内母线到所选出线间隔，经开关触头送入该机房馈线柜。柜内路径表示电气连接。','yard',
+        [enclosed([main.bus,feeder.bus,...feeder.breaker.slice(1)]),cable(feeder.lead),enclosed(feeder.port)]);
+      stop('hall-entry','第 '+(hall.index+1)+' 间机房进线','沿园区内部电缆通道转弯，追踪到本机房的穿墙套管。沿车道两侧可见线缆，中间一段从道路下方的套管穿过。','yard',[cable(p.outdoorSections[0]),enclosed(p.outdoorSections[1]),cable(p.outdoorSections[2])]);
+      stop('switchgear','机房中压开关柜','电缆从墙边上翻到桥架，再下引至机房中压进线端。进出接点间为柜内一次回路示意。','hall',[cable(p.roomIn),enclosed(p.switchInside)]);
+      if(p.toTransformer)stop('transformer','机房配电变压器','机房中压进线接至配变高压侧。绕组经磁场耦合，低压交流从另一组端子引出。','hall',[cable(p.toTransformer),transfer(p.transformerInside)]);
+      const explanation={ups:'配变送入低压交流，UPS 在本方案中向列级配电输出连续交流。',sst:'中压交流直接接至 SST，在功率电子变换与高频隔离后输出 800 V 直流。','800v':'工频配变的交流输出送至集中整流装置，得到 800 V 直流。',hvdc:'工频配变输出交流，集中式 HVDC 整流后向直流母线送电。'}[p.conversion];
+      stop(p.conversion,titles[p.conversion],explanation+'柜内段按原理示意。','hall',[cable(p.toConverter),transfer(p.converterInside)]);
+      stop('rowdist','第 '+(rack.rowIndex+1)+' 列'+(ac?'交流列头柜':'直流列端配电柜'),'沿设施输出桥架到这一列机柜的进线端。本次跟随 '+feed+' 路支路，柜内按母排与分支端子示意。','hall',[cable(p.rowInput),enclosed(p.rowOutputs[feed])]);
+      return {hallIndex:index,hallNumber:hall.index+1,rackIndex:p.rackIndex,profile,slot,feed,yardUnit:branchIndex+1,architecture:config.architecture||'交流 UPS',stops};
+    };
     const rigCache=new Map();
-    model.getRackRig=rig=>{
+    model.getRackRig=(rig,apply=true)=>{
       if(!rig||!Number.isInteger(rig.hallIndex)||!Number.isInteger(rig.rackIndex)||!rig.topology)return null;
       const hall=plan.dims[rig.hallIndex],rack=hall?.rackPoints[rig.rackIndex];if(!rack)return null;
-      const t=rig.topology,signature=[rig.hallIndex,rig.rackIndex,t.id,t.profile,t.architecture,t.modules?.length,t.servers?.length].join('/');
+      const t=rig.topology,signature=[rig.hallIndex,rig.rackIndex,t.id,t.profile,t.architecture,t.modules?.length,t.servers?.length,t.perServer,rig.boardServerId||''].join('/');
       let entry=rigCache.get(signature);
       if(!entry){
         entry=buildRackRig(hall,rack,rig);
         if(rigCache.size>=2)rigCache.delete(rigCache.keys().next().value);
         rigCache.set(signature,entry);
       }
-      entry.updateState(rig);
+      if(apply)entry.updateState(rig);
       return entry;
     };
     return model;
@@ -597,7 +743,7 @@
     const size=max.map((v,i)=>v-min[i]),center=min.map((v,i)=>v+size[i]/2),m=meshBuilder();
     const xf={dx:min[0],dy:min[1],oz:min[2],sx:size[0]/10,sy:size[1]/8,sz:size[2]/18};
     const {box,beam,rect}=m; m.setTransform(xf);
-    const assets=[null],map=new Map(),anchors={},paths=new Set(request.highlight||[]);
+    const assets=[null],map=new Map(),anchors={},edgePoints={},paths=new Set(request.highlight||[]);
     const doorNode={id:t.id+'-DOOR',kind:'door',label:'前检修门'};
     const frameNode={id:t.id,kind:'rack',label:t.label};
     function role(n){
@@ -609,7 +755,7 @@
     function item(n,part=6,customRole=null){
       if(!n)return 0;
       let i=map.get(n.id);if(!i){i=assets.length;map.set(n.id,i);assets.push(n);}
-      m.part(part,h);m.group(n.kind);m.rigTag(i,customRole===null?role(n):customRole);return i;
+      m.part(part,h);m.group(n.kind==='gpu'?'server':n.kind);m.rigTag(i,customRole===null?role(n):customRole);return i;
     }
     const put=(n,pos)=>{anchors[n.id]=m.world(pos);};
     const metal='#9cabb2',edge='#becbd0',body='#293c47',slot='#192b34',dark='#354b58';
@@ -639,9 +785,59 @@
     // Compute tray fronts sit behind the vertical feeds, with separate chassis and I/O faces.
     const serverYMin=1.12,serverYMax=6.80,servers=t.servers;
     const low=.95,region=10.30,unitH=region/Math.max(1,servers.length);
+    let boardBounds=null;
+    const board=request.boardServerId,pcie=t.profile==='pcie',gpuLocations={},serverPorts={};
+    // The indicated board is unfolded toward the service aisle for inspection. A rear section stays at its rack connector.
+    function boardDetail(server,bottom){
+      const floor=bottom+.09,powerZ=floor+.17,front=-4.78;
+      boardBounds=[];
+      for(const x of [front-.23,1.10])for(const y of [.96,6.99])for(const z of [bottom-.12,bottom+(pcie?1.66:.63)])boardBounds.push(m.world([x,y,z]));
+      item(server);
+      box(front,1.14,bottom,5.64,5.62,.09,'#6a7b82','#a7b5ac');
+      box(front+.10,1.24,floor,5.37,5.39,.14,'#22564a','#438575');
+      for(const y of [1.15,6.64])box(front,y,bottom+.05,5.60,.11,.22,'#849493',edge);
+      for(const y of [1.43,6.23])box(front-.07,y,bottom+.045,.10,.39,.20,'#acb9b1',metal);
+      for(const x of [-4.4,-3.58,-2.76,-1.94,-1.12,-.30]){
+        box(x,1.55,powerZ-.035,.49,.22,.12,'#424a52','#67716e');
+        box(x+.04,1.60,powerZ+.09,.39,.12,.035,'#b09063');
+      }
+      if(!pcie){
+        for(const y of [2.62,4.98]){
+          box(-.57,y-.39,powerZ-.025,.74,.77,.10,'#617677','#9aa8a0');
+          box(-.49,y-.30,powerZ+.074,.57,.60,.07,'#916e56','#bd9e7d');
+        }
+      }
+      for(const g of t.gpus.filter(g=>g.serverId===server.id)){
+        item(g);
+        if(pcie){
+          const x=-2.55,y=1.95+g.index*1.24;
+          box(x-1.54,y-.095,powerZ-.04,3.27,.19,.19,'#303e42','#998b64');
+          box(x-1.50,y-.042,powerZ+.12,3.15,.082,1.03,'#27644f','#75937a');
+          box(x-.46,y-.094,powerZ+.37,.86,.052,.52,'#3a4348','#73848a');
+          box(x-.29,y-.14,powerZ+.46,.55,.048,.32,'#9da6a0','#d4c79f');
+          for(let n=0;n<5;n++)box(x+.65+n*.12,y-.10,powerZ+.32,.06,.09,.60,'#576a70','#849595');
+          box(x-1.54,y-.14,powerZ+.10,.12,.29,1.16,'#8999a0',edge);
+          gpuLocations[g.id]=[x,y-.14,powerZ+.62];
+        }else{
+          const x=-3.86+Math.floor(g.index/2)*1.75,y=2.64+(g.index%2)*2.31;
+          box(x-.58,y-.56,powerZ-.03,1.16,1.12,.12,'#315648','#638a70');
+          box(x-.47,y-.44,powerZ+.09,.94,.88,.12,'#2f383c','#737e82');
+          box(x-.245,y-.245,powerZ+.21,.49,.49,.075,'#a5afa7','#d6d4b9');
+          for(const side of [-1,1])for(let k=0;k<4;k++)box(x+side*.35-.047,y-.32+k*.18,powerZ+.215,.094,.137,.04,'#455057','#62716f');
+          gpuLocations[g.id]=[x,y,powerZ+.285];
+        }
+        put(g,gpuLocations[g.id]);
+      }
+    }
     for(const server of servers){
       const bottom=low+server.index*unitH,high=Math.min(1.55,unitH-.075),z=bottom+high*.5;
       item(server);put(server,[.58,4.0,z]);
+      serverPorts[server.id]=[.54,6.56,z];
+      if(server.id===board){
+        boardDetail(server,bottom);
+        item(server);box(.86,serverYMin,bottom,6.49,serverYMax-serverYMin,high,'#536d76','#8da2a7');
+        continue;
+      }
       box(.65,serverYMin,bottom,6.70,serverYMax-serverYMin,high,'#536d76','#8da2a7');
       box(.50,serverYMin+.07,bottom+.044,.16,serverYMax-serverYMin-.14,high-.075,'#304b56','#a8b4b6');
       for(let j=0;j<7;j++)box(.459,serverYMin+.51+j*.49,bottom+high*.35,.048,.33,Math.max(.045,high*.28),'#182f39');
@@ -685,41 +881,63 @@
     }
     const buses=t.buses||[];
     for(const bus of buses){
-      const n=Math.max(1,buses.length),zz=n>1?low+(bus.index+.55)*unitH:10.96;
+      const n=Math.max(1,buses.length),zz=n>1?serverPorts[bus.serverIds[0]][2]+.18:10.96;
       item(bus);put(bus,[.71,6.81,zz]);
       if(n>1)box(.65,6.58,zz-.09,1.25,.40,.20,'#af8e67','#d0b482');
       else{box(.67,6.56,1.05,.26,.25,15.47,'#a88b65','#cfb385');box(.67,6.53,zz,.26,.55,.23,'#a58b68','#d6bb8b');}
     }
     // Each edge is tied to the topology source and destination. No spatial nearest-neighbor inference.
-    const lookup=new Map([t.rowdist,...t.pdus,...slots,...buses,...servers].map(n=>[n.id,n]));
+    const lookup=new Map([t.rowdist,...t.pdus,...slots,...buses,...servers,...t.gpus].map(n=>[n.id,n]));
     function wire(e,points,radius,hex,world=false){
       const from=lookup.get(e.from),to=lookup.get(e.to);if(!from||!to)return;
       const traced=paths.has(from.id)&&paths.has(to.id),upstream=from.kind==='rowdist'||from.kind==='pdu';
       const wireNode={id:e.id,kind:'cable',label:from.label+' → '+to.label,from:e.from,to:e.to,upstream};
       item(wireNode,6,request.highlightStep===e.id?4:traced?(upstream?1:2):0);
       if(world)m.setTransform(null);
-      anchors[e.id]=m.world(points[Math.floor(points.length/2)]);
-      for(let k=1;k<points.length;k++)if(Math.hypot(...difference(points[k],points[k-1]))>.004)beam(points[k-1],points[k],radius,hex,5);
+      edgePoints[e.id]=points.map(p=>m.world(p));
+      anchors[e.id]=edgePoints[e.id][Math.floor(points.length/2)];
+      for(let k=1;k<points.length;k++){
+        if(Math.hypot(...difference(points[k],points[k-1]))<=.004)continue;
+        // Package-side contacts are part of the GPU pick surface, including the exact path endpoint.
+        if(to.kind==='gpu'&&k===points.length-2)item(to);
+        beam(points[k-1],points[k],radius,hex,5);
+      }
       if(world)m.setTransform(xf);
     }
     const source=hall.rowSources[rack.rowIndex]?.pos||hall.points.rowdist;
     if(source)anchors[t.rowdist.id]=source;
     item(t.rowdist);
-    for(const e of t.edges){
+    const boardEdges=board?t.boardEdges.filter(e=>e.from===board):[];
+    for(const e of [...t.edges,...boardEdges]){
       const from=lookup.get(e.from),to=lookup.get(e.to);if(!from||!to)continue;
       if(from.kind==='rowdist'&&to.kind==='pdu'&&source){
         const pin=m.world([.44,to.feed==='A'?.76:7.23,16.39]),offset=to.feed==='A'?-.075:.075,ceiling=max[2]+size[2]*.26;
         const trayX=max[0]+Math.max(.20,size[0]*.17)+offset,topX=max[0]-size[0]*.14,exit=[source[0]+offset,source[1],source[2]+.035];
         wire(e,[exit,[exit[0],exit[1],ceiling],[trayX,exit[1],ceiling],[trayX,pin[1],ceiling],[topX,pin[1],ceiling],[topX,pin[1],pin[2]],[pin[0],pin[1],pin[2]]],Math.max(.018,Math.min(.054,size[2]*.014)),to.feed==='A'?'#a99b83':'#79929a',true);
       }else if(from.kind==='pdu'&&to.kind==='psu'){
-        const dst=moduleLoc[to.id],left=from.feed==='A',pY=left?.78:7.24,tipY=left?dst[1]-.75:dst[1]+.62;
-        wire(e,[[.45,pY,dst[2]-.46],[.17,pY,dst[2]-.46],[.11,tipY,dst[2]-.34],[.25,tipY,dst[2]-.13]],.074,left?'#a79070':'#7796a2');
+        const dst=moduleLoc[to.id],left=from.feed==='A',pY=left?.76:7.23,tipY=left?dst[1]-.75:dst[1]+.62;
+        wire(e,[[.44,pY,16.39],[.44,pY,dst[2]-.46],[.45,pY,dst[2]-.46],[.17,pY,dst[2]-.46],[.11,tipY,dst[2]-.34],[.25,tipY,dst[2]-.13]],.074,left?'#a79070':'#7796a2');
       }else if(from.kind==='psu'&&to.kind==='bus'){
-        const v=moduleLoc[from.id],yy=6.64,zz=buses.length===1?10.96:low+(to.index+.55)*unitH;
-        wire(e,[[6.22,v[1],v[2]],[7.77,v[1],v[2]],[7.77,yy,v[2]],[7.77,yy,zz],[.91,yy,zz]],.073,'#9f8972');
+        const v=moduleLoc[from.id],yy=6.64,zz=buses.length===1?10.96:serverPorts[to.serverIds[0]][2]+.18;
+        const tipY=from.feed==='A'?v[1]-.75:v[1]+.62;
+        wire(e,[[.25,tipY,v[2]-.13],[.61,tipY,v[2]-.13],[.61,v[1],v[2]],[6.22,v[1],v[2]],[7.77,v[1],v[2]],[7.77,yy,v[2]],[7.77,yy,zz],[.91,yy,zz]],.073,'#9f8972');
       }else if(from.kind==='bus'&&to.kind==='server'){
-        const zz=low+(to.index+.45)*unitH;
-        wire(e,[[.85,6.66,zz],[.64,6.86,zz],[.54,6.56,zz]],.057,'#9f9787');
+        const dst=serverPorts[to.id],zz=dst[2],busZ=buses.length===1?10.96:serverPorts[from.serverIds[0]][2]+.18;
+        wire(e,[[.91,6.64,busZ],[.85,6.64,busZ],[.85,6.64,zz],[.64,6.86,zz],dst],.057,'#9f9787');
+      }else if(from.kind==='server'&&to.kind==='gpu'&&gpuLocations[to.id]){
+        const dst=gpuLocations[to.id],src=serverPorts[from.id],plane=low+from.index*unitH+.255;
+        const lane=6.33-to.index*.105,x=dst[0]-.72;
+        const regZ=pcie?dst[2]-.16:plane+.18;
+        item(to);
+        // The regulator beside this package is drawn on the PCIe card or on the NVL tray board.
+        if(pcie){
+          box(x-.14,dst[1]+.012,regZ-.11,.28,.09,.23,'#6c6854','#b4a17b');
+          box(x+.18,dst[1]+.038,regZ-.10,.18,.065,.17,'#343e43','#606969');
+        }else{
+          box(x-.14,dst[1]-.14,plane,.28,.28,.18,'#676a60','#a79774');
+          box(x+.16,dst[1]-.10,plane,.17,.20,.08,'#343f41','#61716b');
+        }
+        wire(e,[src,[.37,src[1],src[2]],[.37,lane,plane],[x,lane,plane],[x,dst[1],plane],[x,dst[1],regZ],[x+.17,dst[1],regZ],[dst[0],dst[1],regZ],dst],.035,'#d6a76d');
       }
     }
     const laneCount=hall.rackPoints.findIndex(p=>p.rowIndex===1),perLane=laneCount===-1?hall.rackPoints.length:laneCount;
@@ -727,7 +945,7 @@
     const grid=[first[0],first[1],nextLane[0]-first[0],nextColumn[1]-first[1]];
     const extractionVector=[-size[0]*.54,0,0],palette=new Uint8Array(256*4);
     let priorPath,priorStep;
-    const geometry={vertices:new Float32Array(m.buffer),faces:m.faces,assets,anchors,center,size,grid,perLane,frontYaw:-Math.PI/2,hinge:hinges[0],hinges,
+    const geometry={vertices:new Float32Array(m.buffer),faces:m.faces,assets,anchors,edgePoints,boardBounds,center,size,grid,perLane,frontYaw:-Math.PI/2,hinge:hinges[0],hinges,
       extractionVector,selectedIndex:0,selectedId:null,ownerRow:rack.rowIndex,rowRole:0,rowLocal:map.get(t.rowdist.id),doorId:doorNode.id,palette,stateVersion:0,
       updateState(rig){
         if(geometry.stateVersion&&priorPath===rig.highlight&&priorStep===rig.highlightStep&&geometry.selectedId===rig.selectedId)return;
@@ -749,6 +967,15 @@
   function projectPoint(p,cam) {
     const u=p[0]*cam.ca-p[1]*cam.sa,v=p[0]*cam.sa+p[1]*cam.ca;
     return [cam.cx+u*cam.scale,cam.cy+(v*cam.sp-p[2]*cam.cp)*cam.scale,v*cam.cp+p[2]*cam.sp];
+  }
+  // Inspect only the unfolded board through any hall wall in front. Other scene pixels retain their depth.
+  function boardWindow(detail,cam,width,height){
+    if(!cam.rig?.boardInspect||!detail?.boardBounds)return null;
+    const points=detail.boardBounds.map(p=>projectPoint(p,cam));
+    const sx=width/cam.width,sy=height/cam.height;
+    const x0=clamp(Math.floor(Math.min(...points.map(p=>p[0]))*sx),0,width),x1=clamp(Math.ceil(Math.max(...points.map(p=>p[0]))*sx),0,width);
+    const y0=clamp(Math.floor(Math.min(...points.map(p=>p[1]))*sy),0,height),y1=clamp(Math.ceil(Math.max(...points.map(p=>p[1]))*sy),0,height);
+    return x1>x0&&y1>y0?{x0,x1,y0,y1}:null;
   }
   function webRenderer(canvas) {
     const gl=canvas.getContext('webgl',{alpha:true,antialias:true,depth:true,preserveDrawingBuffer:false,premultipliedAlpha:true});
@@ -859,12 +1086,13 @@
         if(part>=1.&&part<=2.&&localCut>.18&&localCut<.96){
           float rim=1.-smoothstep(.06,.35,abs(vGate-vWorld.y));col=mix(col,vec3(.54,.92,.87),rim*.8);
         }
-        float family=vTag.x<3.5?vTag.x:(vTag.x==4.||vTag.x==24.||(vTag.x>=20.&&vTag.x<=22.))?1.:(vTag.x==9.||vTag.x==10.||vTag.x==23.)?2.:3.;
+        bool outdoorCooling=vTag.x>=${firstCoolingPick}.&&vTag.x<${firstCoolingPick+maxCoolingUnits}.;
+        float family=vTag.x<3.5?vTag.x:(vTag.x==4.||vTag.x==24.||(vTag.x>=20.&&vTag.x<=22.))?1.:(vTag.x==9.||vTag.x==10.||vTag.x==23.||outdoorCooling)?2.:3.;
         float selected=family<.5?0.:family<1.5?uSelection.x:family<2.5?uSelection.y:uSelection.z;
-        vec3 accent=vTag.x<1.5?vec3(.16,.68,.67):vTag.x<2.5?vec3(.93,.56,.24):vec3(.33,.58,.91);
+        vec3 accent=vTag.x<1.5?vec3(.16,.68,.67):(vTag.x<2.5||outdoorCooling)?vec3(.93,.56,.24):vec3(.33,.58,.91);
         col=col*(1.+selected*.04)+accent*selected*(.034+.095*fres);
         if(uAim.w>.5&&abs(vTag.x-uAim.w)<.25){
-          vec3 ds=vWorld-uAim.xyz;float local=exp(-dot(ds,ds)*.083);
+          vec3 ds=vWorld-uAim.xyz;float local=outdoorCooling?1.:exp(-dot(ds,ds)*.083);
           col+=vec3(.10,.22,.19)*local*(.46+fres);
         }
         if(part==12.&&mat<9.&&uObserve>.5){float gray=dot(col,vec3(.24,.56,.20));col=mix(vec3(gray*.75,gray*.82,gray*.86),col,.18);}
@@ -945,7 +1173,16 @@
       if(first>=0)gl.drawArrays(gl.TRIANGLES,first,end-first);
     }
     function renderLayers(cam){
-      layer(vb,count,0,cam);if(detail)layer(detailBuffer,detail.vertices.length/14,1);
+      layer(vb,count,0,cam);
+      if(!detail)return;
+      const board=boardWindow(detail,cam,canvas.width,canvas.height);
+      if(board){
+        gl.enable(gl.SCISSOR_TEST);
+        gl.scissor(board.x0,canvas.height-board.y1,board.x1-board.x0,board.y1-board.y0);
+        gl.clear(gl.DEPTH_BUFFER_BIT);
+        gl.disable(gl.SCISSOR_TEST);
+      }
+      layer(detailBuffer,detail.vertices.length/14,1);
     }
     function draw(cam,selected,pick=false){
       gl.useProgram(prog);gl.bindBuffer(gl.ARRAY_BUFFER,vb);gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.disable(gl.DITHER);gl.disable(gl.BLEND);
@@ -1030,7 +1267,12 @@
       }
       const phase=Array.from({length:4},(_,h)=>[cutState(1,h,cam.cuts[h]),cutState(2,h,cam.cuts[h])]);
       const layers=detail?[model.faces,detail.faces]:[model.faces];
-      for(const layer of layers)for(const face of layer){
+      for(const layer of layers){
+        if(detail&&layer===detail.faces){
+          const board=boardWindow(detail,cam,width,height);
+          if(board)for(let y=board.y0;y<board.y1;y++)depth.fill(-Infinity,y*width+board.x0,y*width+board.x1);
+        }
+        for(const face of layer){
         const {part,hall,mat}=face,zone=face.group||0,isOuter=part===1||part===2;
         const overlay=Boolean(face.rigId),owner=detail&&hall===active.hallIndex;
         if(owner&&!overlay&&(part===4||part===5)&&face.instance===active.rackIndex)continue;
@@ -1070,7 +1312,7 @@
           if(cs&&cs.lift)w=[w[0],w[1],w[2]+cs.lift];
           const q=projectPoint(w,cam);q[0]*=sx;q[1]*=sy;return q;
         });
-        const focusNear=cam.aim[3]===zone&&zone>0&&Math.hypot(face.points[0][0]-cam.aim[0],face.points[0][1]-cam.aim[1])<3;
+        const focusNear=cam.aim[3]===zone&&zone>0&&(isCoolingPick(zone)||Math.hypot(face.points[0][0]-cam.aim[0],face.points[0][1]-cam.aim[1])<3);
         let ink=(zone>0&&cam.highlight[family(zone)-1]>.35)||focusNear?face.activeInk:face.ink;
         if(detail&&!overlay&&!panel||part===12&&mat<9&&cam.observing)ink=face.contextInk;
         if(panel&&detail.rowRole)ink=wash(face.rgb,detail.rowRole);
@@ -1080,6 +1322,7 @@
         if(mat>=9&&cam.circuit!==0&&cam.circuit!==channel)ink=0xff41382e;
         const id=overlay||panel?0x8000|(panel?detail.rowLocal:face.rigId):mat>=9?-1:isOuter&&zone===1?16+hall:zone>=29?0x4000|zone:part===4?((zone<20?4:zone)|((face.instance+1)<<5)):zone;
         for(let i=1;i<p.length-1;i++)triangle(p[0],p[i],p[i+1],ink,id);
+        }
       }
       ctx.putImageData(frame,0,0);
     }
@@ -1120,6 +1363,9 @@
     const cameraKeys=['yaw','pitch','zoom','fx','fy','fz'];
     let queuedRack,pendingMove=null,focusSignature='',projectionSignature='',labelSignature='',rackRevision=0,rackOrigin=null,nextRackOrigin=null;
     const shortestAngle=(from,to)=>from+Math.atan2(Math.sin(to-from),Math.cos(to-from));
+    let tourPlan=null,tourModel=null,layoutView=false;
+    const hallPins=[];
+    const tourCamera=GridPowerCamera.mount(wrapper,{pose:()=>({yaw,pitch,zoom,fx,fy,fz}),requestDraw,onInspect:step=>options.onTourInspect?.(step)});
     const rackView=GridRackView.mount(wrapper,{
       getRoom:()=>({project,model,hallIndex:openIndex}),
       moveCamera:rackCamera,captureCamera:()=>{
@@ -1150,6 +1396,80 @@
       if(media.matches){wanted=dest;({yaw,pitch,zoom,fx,fy,fz}=dest);}
       else{travel={start:{yaw,pitch,zoom,fx,fy,fz},dest,at:performance.now(),ms:kind==='circuit'?730:640,resolve:()=>{}};wanted=dest;}
       requestDraw();
+    }
+    function fitLayout(){
+      const w=wrapper.clientWidth||800,h=wrapper.clientHeight||420,tilt=Math.PI/2-.015;
+      const base=Math.min(w/190,h/(15+165*Math.sin(tilt)));
+      wanted={yaw:shortestAngle(yaw,0),pitch:tilt,zoom:Math.min(w*.94/150,h*.83/91)/base,fx:0,fy:1,fz:0};
+    }
+    function setLayoutView(on){
+      on=Boolean(on)&&mode==='campus';
+      if(layoutView===on)return;
+      cancelPendingMove();cancelTravel();returnView=null;lastPick=null;focusKey=null;focusSignature='';
+      layoutView=on;wrapper.dataset.layout=String(on);
+      if(on)fitLayout();
+      else{hallPins.forEach(b=>b.hidden=true);focus(null);}
+      options.onLayoutChange?.(on);labelSignature='';requestDraw();
+    }
+    function layoutLabels(){
+      for(let i=0;i<hallPins.length;i++){
+        const h=model.plan.dims[i],pin=hallPins[i],p=projectPoint([h.center[0],h.center[1],5],cam);
+        const n=String(h.index+1).padStart(2,'0');pin.textContent=cam.width<600?n:'机房 '+n;
+        pin.hidden=!layoutView||p[0]<8||p[0]>cam.width-8||p[1]<12||p[1]>cam.height-12;
+        pin.style.left=p[0]+'px';pin.style.top=p[1]+'px';
+      }
+    }
+    function preparePowerTour(settings={}){
+      if(dirty||!model)rebuild();
+      const hall=model.getPowerTour(settings,openIndex);
+      if(!hall)return [];
+      const branch={hallIndex:openIndex,rackIndex:hall.rackIndex,slot:hall.slot};
+      const cabinet=rackView.getJourneyPlan({...branch,serverNumber:settings.serverNumber,gpuNumber:settings.gpuNumber})||rackView.getJourneyPlan(branch);
+      if(!cabinet)return [];
+      const inside=cabinet.stops.filter(s=>s.key!=='rowdist').map(s=>({...s,title:s.label,text:s.description,scope:'rack'}));
+      const stops=[...hall.stops,...inside];
+      if(!stops.length||!stops.every(s=>s.points?.length&&s.points.every(p=>p.length===3&&p.every(Number.isFinite))))return [];
+      tourPlan={...hall,stops,cabinet};tourModel=model;
+      return stops;
+    }
+    function setTourStop(step){
+      if(dirty)rebuild();
+      if(!tourPlan||model!==tourModel)return false;
+      if(layoutView)setLayoutView(false);
+      cancelTravel();cancelPendingMove();queuedRack=null;rackView.cancelTour();
+      if(openIndex!==tourPlan.hallIndex){rackView.clear();openIndex=tourPlan.hallIndex;cuts.fill(0);}
+      if(step.scope==='rack'){
+        const {slot,serverNumber,gpuNumber}=tourPlan.cabinet;
+        if(!rackView.prepareJourney({hallIndex:openIndex,rackIndex:tourPlan.rackIndex,slot,serverNumber,gpuNumber}))return false;
+        rackView.setJourneyStep(step.key);rackView.cancelTour();
+      }else if(rackView.rig)rackView.clear();
+      cancelTravel();
+      focusKey=null;focusSignature='';returnView=null;lastPick=null;
+      aim=[...step.points.at(-1),Math.max(0,pickKeys.indexOf(step.key))];
+      return true;
+    }
+    function tourView(step){
+      const rig=step.scope==='rack'&&rackView.rig&&model.getRackRig(rackView.rig);
+      const end=step.key==='gpu',server=step.key==='server';
+      const board=end||server;
+      const angle=rig?rig.frontYaw+(board ? .20 : .37):(step.scope==='yard' ? -.65 : -.93);
+      const tilt=rig?(board ? .63 : .38):(step.scope==='yard' ? .66 : .85);
+      const w=wrapper.clientWidth||800,h=wrapper.clientHeight||420;
+      const base=Math.min(w/190,h/Math.max(107,15+165*Math.sin(tilt)));
+      const rackHeight=rig?rig.size[2]:1;
+      const span=rig?rackHeight*({pdu:1.72,psu:.72,bus:.92,server:.67,gpu:.54}[step.key]||1):
+        step.scope==='yard'?20:step.key==='switchgear'?25:14;
+      return {yaw:angle,pitch:tilt,zoom:clamp(Math.min(w*.78,h*.96)/(span*base),.7,820)};
+    }
+    function followPowerTour(request){
+      if(request.signal.aborted||!setTourStop(request.step))return Promise.resolve(false);
+      return tourCamera.play(request,tourView(request.step));
+    }
+    function inspectTourLoad(step){
+      if(!setTourStop(step))return false;
+      const target=step.points.at(-1),v=tourView(step);
+      wanted={yaw:shortestAngle(yaw,v.yaw),pitch:v.pitch,zoom:v.zoom,fx:target[0],fy:target[1],fz:target[2]};
+      requestDraw();return true;
     }
     function openRack(slot,index){
       if(mode!=='cutaway')return false;
@@ -1228,7 +1548,8 @@
         ((key.startsWith('rack')&&nearParts.includes(peers[0]))||(peers[0].startsWith('rack')&&nearParts.includes(key)));
       const small=pair||['pdu','psu','network','fan'].includes(key);
       const W=wrapper.clientWidth||850,H=wrapper.clientHeight||440;
-      const tilt=yard?(wide?.68:.55):pair?.72:wide?.89:small?.83:.76;
+      const cooler=!wide&&model.coolingBounds[key];
+      const tilt=cooler?.76:yard?(wide?.68:.55):pair?.72:wide?.89:small?.83:.76;
       let angle=yard?-.67:small?-.81:-.94;
       // Keep the chain near horizontal even if the two connected devices are far apart.
       if(wide){
@@ -1252,18 +1573,20 @@
       }
       const cs=Math.cos(angle),sn=Math.sin(angle),sp=Math.sin(tilt),cp=Math.cos(tilt);
       const project=p=>[p[0]*cs-p[1]*sn,(p[0]*sn+p[1]*cs)*sp-p[2]*cp];
-      const xy=points.map(project),x0=Math.min(...xy.map(p=>p[0])),x1=Math.max(...xy.map(p=>p[0])),y0=Math.min(...xy.map(p=>p[1])),y1=Math.max(...xy.map(p=>p[1]));
+      const boundsPoints=cooler?[cooler.min[0],cooler.max[0]].flatMap(x=>[cooler.min[1],cooler.max[1]].flatMap(y=>
+        [cooler.min[2],cooler.max[2]].map(z=>[x,y,z]))):points;
+      const xy=boundsPoints.map(project),x0=Math.min(...xy.map(p=>p[0])),x1=Math.max(...xy.map(p=>p[0])),y0=Math.min(...xy.map(p=>p[1])),y1=Math.max(...xy.map(p=>p[1]));
       const base=Math.min(W/190,H/Math.max(107,15+165*sp));
       const zone=zones.includes(key),h=model.plan.dims[openIndex],hallUnit=clamp(Math.min(h.w/32,h.d/23),.45,1.8);
       const sameYard=key.startsWith('sub-')&&peers.every(k=>k.startsWith('sub-'));
       const radius=directRig?.25:zone?19:yard?6.4:hallUnit*(small?1.48:2.75);
       const yardWidth=key==='sub-incoming'?16:key==='sub-switchgear'?11:9.0;
-      const padX=sameYard?(wide?6.3:yardWidth):radius*2.8,padY=sameYard?(wide?4.8:8.0):radius*1.8;
-      const fit=Math.min(W*(sameYard?.81:W<490?.61:.67)/(x1-x0+padX),H*(sameYard?.67:.60)/(y1-y0+padY));
+      const padX=cooler?1.15:sameYard?(wide?6.3:yardWidth):radius*2.8,padY=cooler?1.15:sameYard?(wide?4.8:8.0):radius*1.8;
+      const fit=Math.min(W*(cooler?.79:sameYard?.81:W<490?.61:.67)/(x1-x0+padX),H*(cooler?.73:sameYard?.67:.60)/(y1-y0+padY));
       const span=Math.max(.01,Math.hypot(x1-x0,y1-y0));
       const focusScale=pair?(W<500?clamp(fit,46/span,50/span):Math.max(fit,46/span)):fit;
-      const destZoom=clamp(focusScale/base,.68,directRig?190:pair?125:sameYard?40:yard?15:24);
-      const z=points.reduce((n,p)=>n+p[2],0)/points.length;
+      const destZoom=clamp(focusScale/base,.68,directRig?190:pair?125:cooler||sameYard?40:yard?15:24);
+      const z=boundsPoints.reduce((n,p)=>n+p[2],0)/boundsPoints.length;
       const midX=(x0+x1)*.5,depth=((y0+y1)*.5+z*cp)/sp;
       wanted={yaw:shortestAngle(yaw,angle),pitch:tilt,zoom:destZoom,fx:midX*cs+depth*sn,fy:depth*cs-midX*sn,fz:z};
       const distance=Math.hypot(wanted.fx-fx,wanted.fy-fy,wanted.fz-fz);
@@ -1274,6 +1597,7 @@
     }
     function moveToEquipment(key,settings={}){
       if(disposed||typeof key!=='string'||!key)return Promise.resolve(false);
+      if(layoutView)setLayoutView(false);
       const peers=[...new Set((Array.isArray(settings?.peers)?settings.peers:[]).filter(v=>typeof v==='string'&&v!==key))].sort();
       const signature=[key,...peers].join('|');
       if(pendingMove?.signature===signature)return pendingMove.promise;
@@ -1323,6 +1647,7 @@
     }else useSoftware();
     function select(key,notify){
       const next=zones.indexOf(key)>0?key:null;
+      if(layoutView&&next&&notify)setLayoutView(false);
       if(next!==selected){rackView.clear();selected=next;focus(next);requestDraw();}
       if(notify&&next&&typeof options.onSelect==='function') options.onSelect(next);
     }
@@ -1370,6 +1695,10 @@
       if(mode==='cutaway'&&(key==='rack'||key.startsWith('rack:')||key==='psu')){
         openRack(key==='psu'?1:null,typeof hit==='object'?hit.rack:undefined);return;
       }
+      if(key.startsWith('cooling-unit-')){
+        if(options.onInspect)options.onInspect(key);else select('cooling',true);
+        return;
+      }
       if(key.startsWith('sub-')){options.onInspect?.(key);return;}
       const picked=typeof hit==='object'&&Number.isInteger(hit.rack)?model.plan.dims[openIndex]?.rackPoints[hit.rack]:null;
       lastPick=picked?{key,pos:picked.pos}:null;
@@ -1377,7 +1706,7 @@
       if(mode==='cutaway'&&key.startsWith('hall-')){switchHall(Number(key.slice(5)));return;}
       if(mode==='cutaway'&&(equipmentTitles[key]||key.startsWith('rack:'))){
         if(typeof options.onInspect==='function')options.onInspect(key);else select(zones[family(pickKeys.indexOf(key))],true);
-      }else if(zones.includes(key)&&key!=='none'){select(key,true);if(key==='power')options.onInspect?.(key);}
+      }else if(zones.includes(key)&&key!=='none'){select(key,true);if(key==='power'||key==='cooling')options.onInspect?.(key);}
     }
     const labelKeys=[...zones.slice(1),'rack','transformer','switchgear','ups','sst','800v','hvdc','liquid','air','rowdist','pdu','psu','fan','network'];
     const channelMembers={power:['switchgear','transformer','ups','sst','hvdc','800v','rowdist','pdu','psu'],liquid:['liquid','rack'],air:['air','fan','rack'],data:['network','rack']};
@@ -1398,6 +1727,7 @@
       wrapper.append(label);labels[key]=label;
     }
     function positionLabels(){
+      if(layoutView)layoutLabels();
       if(rackView.rig){
         for(const l of Object.values(labels))l.style.display='none';
         hallInfo.hidden=true;hallInfo.style.display='none';
@@ -1411,7 +1741,7 @@
         const filtered=unit&&((channelMembers[circuit]&&!channelMembers[circuit].includes(key))||(!channelMembers[circuit]&&advanced.has(key)&&!focused));
         if(!anchor||unit!==cutaway||(unit&&cam.cut<.48)||(filtered&&!focused)||(focusKey&&!focused&&unit)){lab.style.display='none';continue;}
         const p=projectPoint(focused?aim.slice(0,3):anchor,cam),active=focused||key===selected,short=cam.width<480;
-        if((!unit&&short&&key!==(selected||'it'))||p[0]<6||p[0]>cam.width-6||p[1]<15||p[1]>cam.height-12){lab.style.display='none';continue;}
+        if((layoutView&&key==='it')||p[0]<6||p[0]>cam.width-6||p[1]<15||p[1]>cam.height-12){lab.style.display='none';continue;}
         const arch=project.config?.architecture;
         const ac=project.config?.architecture==='交流 UPS'||!project.config?.architecture;
         const name=key==='rowdist'?(ac?'交流列头柜':'直流列端配电柜'):key==='pdu'?(ac?'A/B 分支 · PDU':'直流母线分支'):
@@ -1442,7 +1772,13 @@
         rackView.clear();signature=sig;model=buildCampus(project,metrics);renderer.upload(model);
         openIndex=clamp(openIndex,0,model.plan.dims.length-1);
         hallMenu.replaceChildren(...model.plan.dims.map((h,i)=>{const o=document.createElement('option');o.value=String(i);o.textContent='第 '+format(h.index+1)+' 间';return o;}));
-        if(mode==='cutaway'||selected)focus(selected,true);
+        hallPins.forEach(b=>b.remove());hallPins.length=0;
+        model.plan.dims.forEach((h,i)=>{
+          const b=document.createElement('button');b.type='button';b.className='tw-layout-hall';b.hidden=true;
+          b.setAttribute('aria-label','进入第 '+(h.index+1)+' 间机房');b.onclick=()=>openHall(i);
+          wrapper.append(b);hallPins.push(b);
+        });
+        if(layoutView)fitLayout();else if(mode==='cutaway'||selected)focus(selected,true);
       }
       dirty=false;if(queuedRack){const req=queuedRack;queuedRack=null;openRack(req.slot,req.index);}
       if(restorePending){const saved=restorePending;restorePending=null;restoreViewState(saved);}
@@ -1464,7 +1800,10 @@
       cut=cuts[openIndex];
       const rackMoving=rackView.tick(dt,reduce,now);
       let arrived=null;
-      if(travel){
+      const tourPose=tourCamera.tick(now);
+      if(tourPose){
+        wanted=tourPose;({yaw,pitch,zoom,fx,fy,fz}=tourPose);
+      }else if(travel){
         const progress=travel.ms?clamp((now-travel.at)/travel.ms,0,1):1,blend=eased(progress);
         const move=k=>travel.start[k]+(travel.dest[k]-travel.start[k])*blend;
         yaw=move('yaw');pitch=move('pitch');fx=move('fx');fy=move('fy');fz=move('fz');
@@ -1488,12 +1827,13 @@
       const bgKey=[width,height,scale.toFixed(4),yaw.toFixed(4),pitch.toFixed(4),cam.cx.toFixed(2),cam.cy.toFixed(2)].join(',');
       if(bgKey!==groundKey){drawGround(ground,cam);groundKey=bgKey;}
       renderer.draw(cam,selected);
+      tourCamera.draw(cam,projectPoint);
       const r=rackView.rig,projectionKey=[bgKey,mode,openIndex,signature,focusSignature,selected,r?.rackIndex,r?.selectedId,r?.extraction].join('|');
       const labelKey=[projectionKey,circuit,cut<.48,rackRevision].join('|');
       if(labelKey!==labelSignature){labelSignature=labelKey;positionLabels();}
       if(options.onProjectionChange&&projectionKey!==projectionSignature){projectionSignature=projectionKey;options.onProjectionChange();}
       if(arrived)arrived.resolve(true);
-      const transit=rackMoving||Boolean(travel)||cutting||yaw!==wanted.yaw||pitch!==wanted.pitch||zoom!==wanted.zoom||fx!==wanted.fx||fy!==wanted.fy||fz!==wanted.fz||highlight.some((v,i)=>v!==(zones[i+1]===selected?1:0));
+      const transit=tourCamera.moving||rackMoving||Boolean(travel)||cutting||yaw!==wanted.yaw||pitch!==wanted.pitch||zoom!==wanted.zoom||fx!==wanted.fx||fy!==wanted.fy||fz!==wanted.fz||highlight.some((v,i)=>v!==(zones[i+1]===selected?1:0));
       if(transit||moving){
         const fps=cpu?(transit?19:10):(transit?60:30),delay=1000/fps-(performance.now()-now);
         if(delay>15)delayed=setTimeout(()=>{delayed=0;requestDraw();},delay-5);else requestDraw();
@@ -1501,7 +1841,7 @@
     }
     function requestDraw(){if(!disposed&&!scheduled&&!document.hidden&&inViewport){if(delayed){clearTimeout(delayed);delayed=0;}scheduled=requestAnimationFrame(draw);}}
     function zoomBy(factor){if(Number.isFinite(factor)&&factor>0){cancelTravel();rackView.cancelTour();wanted.zoom=clamp(wanted.zoom*factor,.52,rackView.rig?320:focusKey?150:24);requestDraw();}}
-    function reset(){if(rackView.rig){rackView.leave();return;}focus(null);requestDraw();}
+    function reset(){if(layoutView){setLayoutView(false);return;}if(rackView.rig){rackView.leave();return;}focus(null);requestDraw();}
     const pointers=new Map();let gesture=null,dragged=false;
     function startGesture(){
       const pts=Array.from(pointers.values());
@@ -1519,7 +1859,7 @@
       if(pts[1]&&gesture.span>0){wanted.zoom=clamp(gesture.zoom*Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y)/gesture.span,.52,rackView.rig?320:focusKey?150:24);requestDraw();return;}
       const dx=e.clientX-gesture.x,dy=e.clientY-gesture.y;
       if(Math.abs(dx)+Math.abs(dy)>3)dragged=true;
-      if(dragged){wanted.yaw=gesture.yaw+dx*.008;wanted.pitch=clamp(gesture.pitch+dy*.006,.24,1.18);requestDraw();}
+      if(dragged){if(layoutView)setLayoutView(false);wanted.yaw=gesture.yaw+dx*.008;wanted.pitch=clamp(gesture.pitch+dy*.006,.24,1.18);requestDraw();}
     });
     function pointerEnd(e,cancel){
       if(!pointers.has(e.pointerId))return;
@@ -1535,10 +1875,11 @@
     wrapper.addEventListener('wheel',e=>{e.preventDefault();zoomBy(Math.exp(-clamp(e.deltaY,-180,180)*.00165));},{passive:false});
     wrapper.addEventListener('keydown',e=>{
       if(e.target.closest('button,select'))return;
+      if(layoutView&&e.key.startsWith('Arrow'))setLayoutView(false);
       switch(e.key){case 'Escape':if(!rackView.rig)return;rackView.leave();break;case 'ArrowLeft':wanted.yaw-=.10;break;case 'ArrowRight':wanted.yaw+=.10;break;case 'ArrowUp':wanted.pitch=clamp(wanted.pitch+.075,.24,1.18);break;case 'ArrowDown':wanted.pitch=clamp(wanted.pitch-.075,.24,1.18);break;case '+':case '=':zoomBy(1.15);break;case '-':zoomBy(1/1.15);break;case 'Home':reset();break;default:return;}
       e.preventDefault();requestDraw();
     });
-    const observer=typeof ResizeObserver==='function'?new ResizeObserver(requestDraw):null;
+    const observer=typeof ResizeObserver==='function'?new ResizeObserver(()=>{if(layoutView)fitLayout();requestDraw();}):null;
     if(observer)observer.observe(wrapper);else window.addEventListener('resize',requestDraw);
     const intersection=typeof IntersectionObserver==='function'?new IntersectionObserver(entries=>{
       inViewport=entries[0].isIntersecting;if(inViewport){prev=0;requestDraw();}else cancelTravel();
@@ -1548,14 +1889,16 @@
     media.addEventListener?.('change',motionChanged);document.addEventListener('visibilitychange',visibilityChanged);
     requestDraw();
     return {update(data={}){project=data.project||{};metrics=data.metrics||{};dirty=true;requestDraw();},
-      setMode(value){if((value==='cutaway'||value==='campus')&&mode!==value){rackView.clear();queuedRack=null;mode=value;cutTarget=value==='cutaway'?1:0;focus(selected);requestDraw();}},
+      setMode(value){if((value==='cutaway'||value==='campus')&&mode!==value){if(layoutView)setLayoutView(false);rackView.clear();queuedRack=null;mode=value;cutTarget=value==='cutaway'?1:0;focus(selected);requestDraw();}},
+      setLayoutView,
       setPlaying(value){const next=Boolean(value);if(next!==playing){playing=next;prev=0;requestDraw();}},
       setCircuit(key){if(Object.hasOwn(circuitIds,key)&&key!==circuit){clearEquipmentFocus();rackView.clear();circuit=key;requestDraw();}},
       openRack,closeRack:rackView.leave,selectRackSlot:rackView.selectSlot,toggleRackView:rackView.toggleView,
       toggleRackDoor:rackView.toggleDoor,toggleRackExtract:rackView.toggleExtract,focusRackStep:rackView.focusStep,
       focusEquipment,moveToEquipment,getEquipmentProjection,clearEquipmentFocus,getViewState,restoreViewState,
+      preparePowerTour,followPowerTour,inspectTourLoad,haltPowerTour(clear=false){tourCamera.halt(clear);},
       setSelected(key){select(key,false);},zoomBy,reset,resize:requestDraw,
-      destroy(){disposed=true;cancelPendingMove();rackView.clear();cancelTravel();clearTimeout(delayed);intersection?.disconnect();media.removeEventListener?.('change',motionChanged);document.removeEventListener('visibilitychange',visibilityChanged);if(observer)observer.disconnect();else window.removeEventListener('resize',requestDraw);cancelAnimationFrame(scheduled);renderer.dispose();wrapper.remove();}};
+      destroy(){disposed=true;tourCamera.destroy();cancelPendingMove();rackView.clear();cancelTravel();clearTimeout(delayed);intersection?.disconnect();media.removeEventListener?.('change',motionChanged);document.removeEventListener('visibilitychange',visibilityChanged);if(observer)observer.disconnect();else window.removeEventListener('resize',requestDraw);cancelAnimationFrame(scheduled);renderer.dispose();wrapper.remove();}};
   }
-  window.GridCampus=Object.freeze({mount});
+  window.GridCampus=Object.freeze({mount,coolingUnitCount});
 })();
