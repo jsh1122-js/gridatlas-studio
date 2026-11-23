@@ -16,8 +16,8 @@
   <link rel="stylesheet" href="map.css">
   <link rel="stylesheet" href="station-view.css">
   <link rel="stylesheet" href="design.css">
-  <link rel="stylesheet" href="twin.css">
-  <link rel="stylesheet" href="twin-plan.css">
+  <link rel="stylesheet" href="twin.css?v=bea8b45280">
+  <link rel="stylesheet" href="twin-plan.css"><link rel="stylesheet" href="twin-rack-guide.css">
   <link rel="stylesheet" href="studio.css"><link rel="stylesheet" href="equipment/equipment.css"><link rel="stylesheet" href="equipment/fabric.css"><link rel="stylesheet" href="equipment/relations.css"><link rel="stylesheet" href="equipment/inspection.css">
   <script defer src="map-data.js"></script>
   <script defer src="map.js"></script>
@@ -31,10 +31,13 @@
   <script defer src="station-view.js"></script>
   <script defer src="nearby-data.js"></script>
   <script defer src="nearby-ui.js"></script>
-  <script defer src="twin-campus.js"></script>
+  <script defer src="twin-rack-circuit.js"></script>
+  <script defer src="twin-rack-guide.js"></script>
+  <script defer src="twin-rack-view.js"></script>
+  <script defer src="twin-campus.js?v=4a70b91f5a"></script>
   <script defer src="twin-territory.js"></script>
-  <script defer src="twin.js"></script>
-  <script defer src="app.js"></script>
+  <script defer src="twin.js?v=3a48cddb5e"></script>
+  <script defer src="app.js?v=ad893b6d86"></script>
 </head>
 <body>
   <a href="#main" class="skip">跳到主要内容</a>
@@ -73,6 +76,7 @@
               <button type="button" data-camera="home" aria-label="复位场景视角" title="复位视角"><i data-i="focus"></i></button>
             </div>
           </div>
+          <section id="tw-rack-guide" hidden aria-label="机柜供电讲解"></section>
           <div class="tp-routes" id="tp-routes" hidden><div class="tp-trace-head"><span>追踪回路</span><div class="tp-switches" aria-label="选择回路"></div></div><div id="tp-chain" aria-label="沿回路查看设备"></div></div>
           <div class="tw-stage-foot"><span id="tw-scene-source">园区建筑与设备布局为方案示意</span><span class="tw-drag-hint"><i data-i="orbit"></i>拖动旋转 · 滚轮缩放</span></div>
         </section>
@@ -122,7 +126,7 @@
       </div>
     </section>
     <section id="equipment" class="page eq-page" hidden aria-labelledby="eq-title">
-      <div class="tw-heading"><div><h1 id="eq-title">设备剖解</h1><p class="tw-project-line"><i data-i="cube"></i><span id="eq-project"></span><span class="tw-separator">/</span>参考设备结构</p></div><div class="tw-heading-actions"><a id="eq-return" href="#twin"><i data-i="orbit"></i><span>返回园区</span></a><a href="#aidc"><i data-i="server"></i>方案设备清单</a></div></div>
+      <div class="tw-heading"><div><h1 id="eq-title">设备剖解</h1><p class="tw-project-line"><i data-i="cube"></i><span id="eq-project"></span><span class="tw-separator">/</span>参考设备结构</p></div><div class="tw-heading-actions"><a id="eq-return" href="#twin"><i data-i="orbit"></i><span>返回园区</span></a><a href="#twin/rack"><i data-i="cube"></i>在机房中看机柜</a><a href="#aidc"><i data-i="server"></i>方案设备清单</a></div></div>
       <div class="eq-navline"><label for="eq-category-picker">选择设备</label><select id="eq-category-picker"><optgroup label="算力与互联"><option value="rack">算力机柜</option><option value="network">数据布线与交换</option></optgroup><optgroup label="机房与机柜配电"><option value="rowdist">列头柜</option><option value="pdu">机柜 PDU</option><option value="psu">机柜 PSU</option></optgroup><optgroup label="设施供电"><option value="switchgear">GIS 开关柜</option><option value="transformer">配电变压器</option><option value="ups">UPS</option><option value="sst">SST / 800 V</option><option value="hvdc">集中式 HVDC</option></optgroup><optgroup label="热管理"><option value="liquid">冷板液冷</option><option value="air">机房风冷</option><option value="fan">风扇模组</option></optgroup></select><span id="eq-room-context" hidden></span></div>
       <details class="eq-directory"><summary>全部设备</summary><div class="eq-categories" aria-label="设备目录"><div class="eq-cat-group"><small>算力与互联</small><div><button type="button" data-eq-category="rack"><i data-i="server"></i>算力机柜</button><button type="button" data-eq-category="network"><i data-i="network"></i>数据布线与交换</button></div></div><div class="eq-cat-group"><small>机房与机柜配电</small><div><button type="button" data-eq-category="rowdist"><i data-i="bolt"></i>列头柜</button><button type="button" data-eq-category="pdu"><i data-i="bolt"></i>机柜 PDU</button><button type="button" data-eq-category="psu"><i data-i="bolt"></i>机柜 PSU</button></div></div><div class="eq-cat-group"><small>设施供电</small><div><button type="button" data-eq-category="switchgear"><i data-i="network"></i>GIS 开关柜</button><button type="button" data-eq-category="transformer"><i data-i="bolt"></i>配电变压器</button><button type="button" data-eq-category="ups"><i data-i="bolt"></i>UPS</button><button type="button" data-eq-category="sst"><i data-i="network"></i>SST / 800 V</button><button type="button" data-eq-category="hvdc"><i data-i="bolt"></i>集中式 HVDC</button></div></div><div class="eq-cat-group"><small>热管理</small><div><button type="button" data-eq-category="liquid"><i data-i="drop"></i>冷板液冷</button><button type="button" data-eq-category="air"><i data-i="fan"></i>机房风冷</button><button type="button" data-eq-category="fan"><i data-i="fan"></i>风扇模组</button></div></div></div></details>
       <div class="eq-layout">

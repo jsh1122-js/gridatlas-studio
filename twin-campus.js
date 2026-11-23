@@ -5,7 +5,7 @@
   const zones = ['none', 'it', 'cooling', 'power'];
   const zoneNames = {it:'数据机房', cooling:'冷却机组', power:'供配电区'};
   const pickKeys=[...zones,'rack','ups','sst','hvdc','transformer','liquid','air','switchgear'];
-  pickKeys[12]='800v';pickKeys[13]='rowdist';pickKeys[14]='pdu';pickKeys[15]='psu';pickKeys[23]='fan';pickKeys[24]='network';pickKeys[20]='rack:gb200';pickKeys[21]='rack:gb300';pickKeys[22]='rack:pcie';
+  pickKeys[12]='800v';pickKeys[13]='rowdist';pickKeys[14]='pdu';pickKeys[15]='psu';pickKeys[23]='fan';pickKeys[24]='network';pickKeys[25]='door';pickKeys[26]='server';pickKeys[27]='bus';pickKeys[28]='cable';pickKeys[20]='rack:gb200';pickKeys[21]='rack:gb300';pickKeys[22]='rack:pcie';
   const rackTypes={gb200:['GB200','#75daca'],gb300:['GB300','#e7b172'],pcie:['PCIe','#85b8e3']};
   const equipmentTitles={rowdist:'列头配电',pdu:'机柜配电',psu:'机柜 PSU',fan:'EC 风扇',network:'ToR 交换机','800v':'800 V 直流柜',rack:'IT 机柜',ups:'UPS 电源柜',sst:'SST 变换柜',hvdc:'直流电源柜',transformer:'隔离变压器',liquid:'液冷 CDU',air:'机房风冷',switchgear:'配电柜'};
   const circuitIds={all:0,power:1,liquid:2,air:3,data:4,none:5};
@@ -70,8 +70,8 @@
 
   function meshBuilder() {
     const buffer = [], faces = [];
-    let group=0,part=0,hall=0,instance=-1,pivot=null,transform=null,flow=null;
-    const world=p=>transform?[transform.dx+p[0]*transform.sx,transform.dy+p[1]*transform.sy,.43+(p[2]-.43)*transform.sz]:p;
+    let group=0,part=0,hall=0,instance=-1,pivot=null,transform=null,flow=null,rigMeta=null;
+    const world=p=>transform?[transform.dx+p[0]*transform.sx,transform.dy+p[1]*transform.sy,(transform.oz??(.43-.43*transform.sz))+p[2]*transform.sz]:p;
     function face(points,hex,lit=true) {
       if(transform)points=points.map(world);
       const spin=pivot?(transform?world([...pivot,0]).slice(0,2):pivot):null;
@@ -82,9 +82,9 @@
       const rgb=albedo.map((v,i)=>clamp(v*lum+[.004,.012,.027][i],0,1));
       for(let k=1;k<points.length-1;k++)for(const p of [points[0],points[k],points[k+1]]){
         const distance=flow?flow.start+(p[0]-flow.p[0])*flow.axis[0]+(p[1]-flow.p[1])*flow.axis[1]+(p[2]-flow.p[2])*flow.axis[2]:0;
-        buffer.push(...p,...albedo,...normal,group,part+hall*.1,mat,...(spin||[part===4?instance+1:distance,0]));
+        buffer.push(...p,...albedo,...normal,group,part+hall*.1,mat,...(rigMeta||spin||[[4,5,10].includes(part)?instance+1:distance,0]));
       }
-      faces.push({points,rgb,group,normal,part,hall,mat,instance,pivot:spin,flow:flow?.start||0});
+      faces.push({points,rgb,group,normal,part,hall,mat,instance,pivot:spin,flow:flow?.start||0,rigId:rigMeta?.[0]||0,rigRole:rigMeta?.[1]||0});
     }
     function polygon(points,z,fill,lit=false){face(points.map(([x,y])=>[x,y,z]),fill,lit);}
     function rect(x,y,w,d,z,fill){polygon([[x,y],[x+w,y],[x+w,y+d],[x,y+d]],z,fill);}
@@ -134,7 +134,7 @@
       }
       flow=null;
     }
-    return {trace,world,setTransform:v=>{transform=v;},buffer,faces,face,polygon,rect,box,prism,beam,cylinder,circle,shadow,group:key=>{group=Math.max(0,pickKeys.indexOf(key));},part:(type,n=0,id=-1)=>{part=type;hall=n;instance=id;},rotor:(p)=>{pivot=p;}};
+    return {trace,world,rigTag:(id,role)=>{rigMeta=id?[id,role]:null;},setTransform:v=>{transform=v;},buffer,faces,face,polygon,rect,box,prism,beam,cylinder,circle,shadow,group:key=>{group=Math.max(0,pickKeys.indexOf(key));},part:(type,n=0,id=-1)=>{part=type;hall=n;instance=id;},rotor:(p)=>{pivot=p;}};
   }
 
   function buildCampus(project={},metrics={}){
@@ -300,7 +300,7 @@
         const lanes=clamp(Math.ceil(Math.sqrt(hall.symbols*.52)),1,6),rackCount=Math.ceil(hall.symbols/lanes);
         const rowD=(d-20)/rackCount,laneW=(w-3.4)/lanes,rackW=Math.min(laneW*.60,2.8);
         const demoLane=Math.floor((lanes-1)/2),demoRow=Math.min(rackCount-1,Math.floor(rackCount*.55));
-        let demo=null;hall.rackPoints=[];
+        let demo=null;hall.rackPoints=[];hall.rowSources=[];
         for(let q=0;q<lanes;q++){
           const xx=x+1.7+q*laneW;
           m.part(3,b);m.group('it');
@@ -312,8 +312,17 @@
             const profile=typeof sample==='string'?sample:sample?.profile,style=rackTypes[profile];
             drawnRacks++;
             const rackKey=style?'rack:'+profile:'rack',at=[xx+rackW*.5,yy+rackD*.52,floor+4.14],id=q*rackCount+j;
-            hall.rackPoints[id]={pos:m.world(at),key:rackKey};
-            if(q===demoLane&&j===demoRow){mark('rack',at);hall.rackType=style?profile:null;demo={xx,yy,depth:rackD};}
+            const min=m.world([xx,yy,floor+.97]),max=m.world([xx+rackW,yy+rackD,floor+4.13]);
+            hall.rackPoints[id]={pos:m.world(at),key:rackKey,rowIndex:q,columnIndex:j,min,max};
+            if(j===0&&q!==demoLane){
+              // Each row has its own illustrative distribution panel at the service end.
+              const dx=xx+.03,dy=-30.35,ww=Math.min(rackW+.28,laneW*.78),dd=1.54,bz=floor+.98;
+              m.part(10,b,q);m.group('rowdist');
+              box(dx,dy,bz,ww,dd,3.18,'#627c85','#acb9bc');box(dx+.12,dy+dd,bz+.28,ww-.24,.13,2.6,'#47616c','#82989b');
+              for(let z=0;z<5;z++)box(dx+.22,dy+dd+.13,bz+.46+z*.40,ww-.44,.08,.14,'#b39b77');
+              hall.rowSources[q]={pos:m.world([dx+ww*.5,dy+dd*.55,bz+3.2])};
+            }
+            if(q===demoLane&&j===demoRow){mark('rack',at);hall.rackType=style?profile:null;demo={xx,yy,depth:rackD,id};}
             m.part(4,b,id);m.group(rackKey);
             box(xx,yy,floor+.96,rackW,rackD,3.15,'#2e4959','#6c858e');
             box(xx+.15,yy-.02,floor+2.98,rackW-.3,.09,.12,'#63c4c5');
@@ -324,6 +333,7 @@
         }
         m.part(3,b);
         m.group('it');
+        m.part(12,b);
         // Service ladders, rack branches and overhead ducts follow the selected cooling system.
         const liquid=config.cooling==='冷板液冷',hybrid=config.cooling!=='风冷'&&!liquid;
         for(let q=0;q<lanes;q++){
@@ -342,6 +352,7 @@
             for(let yy=y+4;yy<y+d-17;yy+=5.1)box(xx-.45,yy,floor+4.60,.96,.95,.25,'#71878c','#b7c6c7');
           }
         }
+        m.part(3,b);
         // The service gallery shares the hall footprint with the IT rows.
         // Cutaway devices are schematic footprints; equipment counts come from the design.
         const z=floor+.99;
@@ -401,7 +412,7 @@
           const rowX=clamp(rx-.35,1.0,20.5),rowY=3.4,rowW=3.35,rowD=2.7,rowTop=z+4.30;
           const tHigh=z+5.25,powerX=rx+rackW+.42,dataX=rx-.61;
           // Freestanding row distribution equipment: warm breaker covers for AC, guarded +/- bars for DC.
-          m.group('rowdist');box(rowX-.16,rowY-.14,z+.04,rowW+.32,rowD+.28,.26,'#617781','#95a6a5');
+          m.part(10,b,demoLane);m.group('rowdist');box(rowX-.16,rowY-.14,z+.04,rowW+.32,rowD+.28,.26,'#617781','#95a6a5');
           box(rowX,rowY,z+.30,rowW,rowD,4.0,ac?'#63778a':'#557b83','#abbcbd');
           for(let k=0;k<2;k++){
             const px=rowX+k*rowW/2+.10,ww=rowW/2-.19;
@@ -410,7 +421,7 @@
             box(px+.20,rowY+rowD+.13,z+3.30,ww-.4,.1,.31,'#89c1be');
           }
           for(let j=0;j<6;j++)rect(rowX+.2,rowY+.23+j*.34,rowW-.4,.1,rowTop+.02,'#708a92');
-          mark('rowdist',[rowX+rowW*.55,rowY+rowD*.55,rowTop+.05]);
+          mark('rowdist',[rowX+rowW*.55,rowY+rowD*.55,rowTop+.05]);hall.rowSources[demoLane]={pos:hall.points.rowdist};m.part(5,b,demo.id);
           // A/B outlet strips or DC branch bars are mounted just outside the rack rear side.
           m.group('pdu');
           for(const [px,tone] of [[pA,'#e2aa6e'],[pB,'#85b9ce']]){
@@ -461,7 +472,7 @@
               }
             }
           }
-          m.group('it');
+          m.part(12,b);m.group('it');
           const fromRowX=rowX+rowW*.68,fromRowY=rowY+rowD*.51;
           const trunkY=6.40;
           ladder(3.8,trunkY,20.4,trunkY,tHigh-.22,.32,'#9a9382');
@@ -500,6 +511,7 @@
           const low=z+.41,aisle=rx-.39;
           m.trace([[4.65,18.0,z+3.75],[4.65,18.0,z+4.33],[.76,18.0,z+4.33],[.76,5.2,z+4.33],[.76,5.2,low],[aisle,5.2,low],[aisle,ry+rd*.45,low],[rx-.04,ry+rd*.45,z+.80]],11,.17,'#719db5');
         }
+        m.part(12,b);m.group('it');
         const header=y+1.25;
         box(x+.65,header,floor+4.65,w-1.30,.48,.55,'#a87e54','#cda661');
         for(let i=0;i<3;i++)box(x+.74+i*(w-1.8)/3,header+.1,floor+1,.44,.22,3.65,'#879ca1');
@@ -589,7 +601,156 @@
       routes.push({points,color:route.glow});
     }
     anchors.power=[46,15,6.6];
-    return {plan,vertices:new Float32Array(m.buffer),faces:m.faces,anchors,routes};
+    const model={plan,vertices:new Float32Array(m.buffer),faces:m.faces,anchors,routes};
+    let lastKey='',cached=null;
+    model.getRackRig=rig=>{
+      if(!rig||!Number.isInteger(rig.hallIndex)||!Number.isInteger(rig.rackIndex)||!rig.topology)return null;
+      const hall=plan.dims[rig.hallIndex],rack=hall?.rackPoints[rig.rackIndex];if(!rack)return null;
+      const t=rig.topology,signature=[rig.hallIndex,rig.rackIndex,t.id,t.profile,t.architecture,t.modules?.length,t.servers?.length,rig.selectedId||'',(rig.highlight||[]).join('|'),rig.highlightStep||''].join('/');
+      if(signature!==lastKey){lastKey=signature;cached=buildRackRig(hall,rack,rig);}
+      return cached;
+    };
+    return model;
+  }
+
+  // A single, lazily generated rack remains in the same world coordinates and depth buffer as its hall.
+  function buildRackRig(hall,rack,request){
+    const t=request.topology,h=request.hallIndex,id=request.rackIndex,min=rack.min,max=rack.max;
+    const size=max.map((v,i)=>v-min[i]),center=min.map((v,i)=>v+size[i]/2),m=meshBuilder();
+    const xf={dx:min[0],dy:min[1],oz:min[2],sx:size[0]/10,sy:size[1]/8,sz:size[2]/18};
+    const {box,beam,rect}=m; m.setTransform(xf);
+    const assets=[null],map=new Map(),anchors={},paths=new Set(request.highlight||[]);
+    const selected=t.modules.find(n=>n.id===request.selectedId),doorNode={id:t.id+'-DOOR',kind:'door',label:'前检修门'};
+    const frameNode={id:t.id,kind:'rack',label:t.label};
+    function role(n){
+      if(n.id===request.highlightStep)return 4;
+      if(n.id===request.selectedId)return 3;
+      if(!paths.has(n.id))return 0;
+      return n.kind==='rowdist'||n.kind==='pdu'?1:2;
+    }
+    function item(n,part=6,customRole=null){
+      if(!n)return 0;
+      let i=map.get(n.id);if(!i){i=assets.length;map.set(n.id,i);assets.push(n);}
+      m.part(part,h);m.group(n.kind);m.rigTag(i,customRole===null?role(n):customRole);return i;
+    }
+    const put=(n,pos)=>{anchors[n.id]=m.world(pos);};
+    const metal='#9cabb2',edge='#becbd0',body='#293c47',slot='#192b34',dark='#354b58';
+    item(frameNode);put(frameNode,[4.3,4,9.1]);
+    box(0,0,0,10,8,.40,dark,'#82919a');box(0,0,17.66,10,8,.34,'#657b88','#a8b7bf');
+    box(9.62,.18,.37,.32,7.64,17.29,'#3a525d','#7c8d93');
+    box(.21,.02,.43,9.50,.18,17.07,'#4b606c','#8798a0');box(.21,7.8,.43,9.5,.18,17.07,'#4b606c','#8798a0');
+    for(const xx of [.12,9.48])for(const yy of [.18,7.48])box(xx,yy,.34,.34,.34,17.35,'#607886',metal);
+    for(const yy of [.49,7.28]){
+      box(.44,yy,.64,.24,.20,16.05,'#8f9c9f',metal);
+      for(let i=0;i<25;i++)box(.415,yy+.033,.88+i*.62,.04,.13,.17,'#283b44');
+    }
+    // Two mesh-faced leaves swing into the physical service aisle. Hinges remain on their frame posts.
+    const hinges=[m.world([-.035,.20,0]),m.world([-.035,7.8,0])];
+    for(let side=0;side<2;side++){
+      const y0=side?4.03:.22,wide=3.75,part=side?11:7;
+      item(doorNode,part);box(-.165,y0,.44,.13,wide,17.14,'#344954','#768892');
+      for(const yy of [y0+.04,y0+wide-.15])box(-.25,yy,.46,.10,.14,17.10,'#697f8a',edge);
+      for(const zz of [.5,9.35,17.22])box(-.25,y0+.12,zz,.10,wide-.22,.23,'#657a85',metal);
+      for(let q=0;q<29;q++)for(let k=0;k<3;k++)box(-.184,y0+.27+k*1.12,.98+q*.55,.028,.90,.17,'#1b2d37');
+      const latchY=side?y0+.25:y0+wide-.47;
+      box(-.31,latchY,8.2,.22,.20,1.35,'#7a8e99','#c0cbd0');box(-.43,latchY+.035,8.52,.15,.13,.68,'#9caeb3',edge);
+      const hy=side?7.76:.18;
+      for(const zz of [1.2,8.6,15.7])beam([-.06,hy,zz],[-.06,hy,zz+.92],.13,'#91a1a8',8);
+    }
+    put(doorNode,[-.15,4.0,8.9]);
+    // Compute tray fronts sit behind the vertical feeds, with separate chassis and I/O faces.
+    const serverYMin=1.12,serverYMax=6.80,servers=t.servers;
+    const low=.95,region=10.30,unitH=region/Math.max(1,servers.length);
+    for(const server of servers){
+      const bottom=low+server.index*unitH,high=Math.min(1.55,unitH-.075),z=bottom+high*.5;
+      item(server);put(server,[.58,4.0,z]);
+      box(.65,serverYMin,bottom,6.70,serverYMax-serverYMin,high,'#536d76','#8da2a7');
+      box(.50,serverYMin+.07,bottom+.044,.16,serverYMax-serverYMin-.14,high-.075,'#304b56','#a8b4b6');
+      for(let j=0;j<7;j++)box(.459,serverYMin+.51+j*.49,bottom+high*.35,.048,.33,Math.max(.045,high*.28),'#182f39');
+      for(const yy of [serverYMin+.18,serverYMax-.34])box(.36,yy,bottom+high*.13,.16,.13,high*.62,'#9eafb1','#c4cfc9');
+      box(.43,serverYMax-.62,bottom+high*.58,.04,.15,Math.max(.05,high*.15),'#83cfc4');
+    }
+    // A and B are separately pickable. The active module's traced supply is colored independently.
+    for(const pdu of t.pdus){
+      const yy=pdu.feed==='B'?7.04:.54;item(pdu);put(pdu,[.26,yy+.21,7.8]);
+      box(.24,yy,.77,.50,.42,15.9,'#344d58','#93a4ad');
+      box(.215,yy+.027,.94,.05,.10,15.35,pdu.feed==='A'?'#c09a68':'#719eaf');
+      for(let j=0;j<13;j++){
+        const zz=1.24+j*1.10;
+        box(.19,yy+.14,zz,.08,.23,.58,'#586d72','#8c9e9d');
+        box(.14,yy+.19,zz+.11,.06,.12,.29,'#263c47');
+      }
+    }
+    // Distinct power-supply bays, retention handles, contacts and perforated enclosure panels.
+    const slots=t.modules,rows=Math.ceil(slots.length/2),rackY0=1.20,slotW=2.78;
+    const upper=17.28,room=5.52,step=room/rows,slotH=Math.min(1.95,step-.18);
+    const moduleLoc={};
+    for(const md of slots){
+      const j=md.index,yy=rackY0+(j%2)*2.90,zz=upper-(Math.floor(j/2)+1)*step+.06;
+      item(frameNode);box(.63,yy-.05,zz-.14,7.3,slotW+.10,.14,'#536873',metal);
+      box(6.35,yy+.05,zz,1.25,slotW-.10,slotH,'#394f5c','#6f858c');
+      item(md,8);put(md,[.31,yy+slotW*.50,zz+slotH*.53]);moduleLoc[md.id]=[.24,yy+slotW*.53,zz+slotH*.5];
+      box(.41,yy+.04,zz+.05,5.76,slotW-.08,slotH-.09,'#7a8d94','#adbcc1');
+      box(.245,yy,zz,.23,slotW,slotH,'#657e87','#c4cece');
+      for(let v=0;v<3;v++)for(let k=0;k<6;k++){
+        const zc=zz+.20+v*(slotH-.46)/3;
+        box(.215,yy+.22+k*.24,zc,.04,.14,Math.max(.07,slotH*.09),'#243d48');
+      }
+      for(let k=0;k<8;k++)rect(.99+k*.58,yy+.23,.29,slotW-.46,zz+slotH-.021,'#73888e');
+      const hy=yy+slotW-.52,hz=zz+slotH*.25,hh=slotH*.48;
+      beam([.19,hy,hz],[-.035,hy,hz],.076,'#cfcec2',6);
+      beam([-.035,hy,hz],[-.035,hy,hz+hh],.076,'#c6c8bf',6);
+      beam([-.035,hy,hz+hh],[.19,hy,hz+hh],.076,'#c6c8bf',6);
+      box(.09,yy+.15,zz+slotH-.26,.16,.50,.12,md.feed==='A'?'#d6a266':'#77b1c0');
+      box(.19,yy+1.0,zz+slotH-.23,.055,.17,.09,'#98d7c0');
+      for(let k=0;k<4;k++)box(6.17,yy+.44+k*.43,zz+slotH*.30,.18,.18,slotH*.29,'#bd9c65',metal);
+    }
+    const buses=t.buses||[];
+    for(const bus of buses){
+      const n=Math.max(1,buses.length),zz=n>1?low+(bus.index+.55)*unitH:10.96;
+      item(bus);put(bus,[.71,6.81,zz]);
+      if(n>1)box(.65,6.58,zz-.09,1.25,.40,.20,'#af8e67','#d0b482');
+      else{box(.67,6.56,1.05,.26,.25,15.47,'#a88b65','#cfb385');box(.67,6.53,zz,.26,.55,.23,'#a58b68','#d6bb8b');}
+    }
+    // Each edge is tied to the topology source and destination. No spatial nearest-neighbor inference.
+    const lookup=new Map([t.rowdist,...t.pdus,...slots,...buses,...servers].map(n=>[n.id,n]));
+    function wire(e,points,radius,hex,world=false){
+      const from=lookup.get(e.from),to=lookup.get(e.to);if(!from||!to)return;
+      const traced=paths.has(from.id)&&paths.has(to.id),upstream=from.kind==='rowdist'||from.kind==='pdu';
+      const wireNode={id:e.id,kind:'cable',label:from.label+' → '+to.label};
+      item(wireNode,6,request.highlightStep===e.id?4:traced?(upstream?1:2):0);
+      if(world)m.setTransform(null);
+      anchors[e.id]=m.world(points[Math.floor(points.length/2)]);
+      for(let k=1;k<points.length;k++)if(Math.hypot(...difference(points[k],points[k-1]))>.004)beam(points[k-1],points[k],radius,hex,5);
+      if(world)m.setTransform(xf);
+    }
+    const source=hall.rowSources[rack.rowIndex]?.pos||hall.points.rowdist;
+    if(source)anchors[t.rowdist.id]=source;
+    item(t.rowdist);
+    for(const e of t.edges){
+      const from=lookup.get(e.from),to=lookup.get(e.to);if(!from||!to)continue;
+      if(from.kind==='rowdist'&&to.kind==='pdu'&&source){
+        const pin=m.world([.44,to.feed==='A'?.76:7.23,16.39]),offset=to.feed==='A'?-.075:.075,ceiling=max[2]+size[2]*.26;
+        const trayX=max[0]+Math.max(.20,size[0]*.17)+offset,topX=max[0]-size[0]*.14,exit=[source[0]+offset,source[1],source[2]+.035];
+        wire(e,[exit,[exit[0],exit[1],ceiling],[trayX,exit[1],ceiling],[trayX,pin[1],ceiling],[topX,pin[1],ceiling],[topX,pin[1],pin[2]],[pin[0],pin[1],pin[2]]],Math.max(.018,Math.min(.054,size[2]*.014)),to.feed==='A'?'#a99b83':'#79929a',true);
+      }else if(from.kind==='pdu'&&to.kind==='psu'){
+        const dst=moduleLoc[to.id],left=from.feed==='A',pY=left?.78:7.24,tipY=left?dst[1]-.75:dst[1]+.62;
+        wire(e,[[.45,pY,dst[2]-.46],[.17,pY,dst[2]-.46],[.11,tipY,dst[2]-.34],[.25,tipY,dst[2]-.13]],.074,left?'#a79070':'#7796a2');
+      }else if(from.kind==='psu'&&to.kind==='bus'){
+        const v=moduleLoc[from.id],yy=6.64,zz=buses.length===1?10.96:low+(to.index+.55)*unitH;
+        wire(e,[[6.22,v[1],v[2]],[7.77,v[1],v[2]],[7.77,yy,v[2]],[7.77,yy,zz],[.91,yy,zz]],.073,'#9f8972');
+      }else if(from.kind==='bus'&&to.kind==='server'){
+        const zz=low+(to.index+.45)*unitH;
+        wire(e,[[.85,6.66,zz],[.64,6.86,zz],[.54,6.56,zz]],.057,'#9f9787');
+      }
+    }
+    const laneCount=hall.rackPoints.findIndex(p=>p.rowIndex===1),perLane=laneCount===-1?hall.rackPoints.length:laneCount;
+    const first=hall.rackPoints[0].pos,nextLane=hall.rackPoints[perLane]?.pos||first,nextColumn=perLane>1?hall.rackPoints[1].pos:first;
+    const grid=[first[0],first[1],nextLane[0]-first[0],nextColumn[1]-first[1]];
+    const selectedIndex=selected?map.get(selected.id)||0:0,extractionVector=[-size[0]*.54,0,0];
+    return {vertices:new Float32Array(m.buffer),faces:m.faces,assets,anchors,center,size,grid,perLane,frontYaw:-Math.PI/2,hinge:hinges[0],hinges,
+      extractionVector,selectedIndex,ownerRow:rack.rowIndex,rowRole:role(t.rowdist),rowLocal:map.get(t.rowdist.id),doorId:doorNode.id,
+      anchor(nodeId,extension=0){const a=anchors[nodeId];if(!a)return null;return nodeId===selected?.id?along(a,extractionVector,clamp(extension,0,1)):a.slice();}};
   }
 
   const pitch0=.565,yaw0=-.61;
@@ -603,36 +764,54 @@
     const vertex=`
       attribute vec3 aPos,aColor,aNormal,aMeta;
       attribute vec2 aPivot;
-      uniform vec4 uView,uScreen,uCuts;
+      uniform vec4 uView,uScreen,uCuts,uRig,uPin,uPull,uWindow,uScope,uGrid;uniform float uOverlay,uPerLane;
       uniform float uCut,uTime,uPass;
       varying vec3 vColor,vWorld,vNormal,vTag;
-      varying float vGate;varying vec2 vInfo;
+      varying float vGate;varying vec3 vInfo;
       const vec3 light=normalize(vec3(-.56,-.64,.78));
       vec3 sunlight(vec3 p){vec3 right=normalize(vec3(.64,-.56,0.));return vec3(dot(p,right)/95.,dot(p,cross(light,right))/86.,-dot(p,light)/116.);}
       void main(){
         float part=floor(aMeta.y+.001),hall=fract(aMeta.y+.001)*10.;
         float localCut=hall<.5?uCuts.x:hall<1.5?uCuts.y:hall<2.5?uCuts.z:uCuts.w;
         float phase=clamp(localCut/.96,0.,1.);
-        vec3 p=aPos;
+        vec3 p=aPos,norm=aNormal;
+        if(uOverlay>.5&&(part==7.||part==11.)){
+          vec2 pin=part==7.?uPin.xy:uPin.zw;float a=(part==7.?1.:-1.)*1.46*uRig.z;
+          mat2 rotation=mat2(cos(a),sin(a),-sin(a),cos(a));p.xy=pin+rotation*(p.xy-pin);norm.xy=rotation*norm.xy;
+        }
+        if(uOverlay>.5&&part==8.&&abs(aPivot.x-uRig.w)<.2)p+=uPull.xyz*uPull.w;
         if(aMeta.z>5.5&&aMeta.z<6.5){
           float angle=uTime*3.35+dot(aPivot,vec2(.2,.14));vec2 q=p.xy-aPivot;
           p.xy=aPivot+vec2(cos(angle)*q.x-sin(angle)*q.y,sin(angle)*q.x+cos(angle)*q.y);
         }
         if(part==2.)p.z+=8.8*smoothstep(0.,.42,phase)*(1.-.22*smoothstep(.66,1.,phase));
-        vColor=aColor;vWorld=p;vNormal=aNormal;vTag=vec3(aMeta.x,part,aMeta.z);vInfo=vec2(floor(hall+.1),aPivot.x);
+        vColor=aColor;vWorld=p;vNormal=norm;vTag=vec3(aMeta.x,part,aMeta.z);vInfo=vec3(floor(hall+.1),aPivot.x,aPivot.y);
         vGate=24.3-57.*smoothstep(.19,.965,phase);
         if(uPass==1.)gl_Position=vec4(sunlight(p),1.);
         else{
           float x=p.x*uView.x-p.y*uView.y,d=p.x*uView.y+p.y*uView.x,y=d*uView.z-p.z*uView.w;
           gl_Position=vec4(x*uScreen.x+uScreen.z,-y*uScreen.y+uScreen.w,-(d*uView.w+p.z*uView.z)/360.,1.);
         }
-        if((part>=3.&&localCut<.002)||(part>=1.&&part<=2.&&phase>.999))gl_Position=vec4(4.,4.,4.,1.);
+        bool removeBackground=false;
+        if(uRig.x>=0.&&uOverlay<.5){
+          float distanceHall=vInfo.x-uRig.x;
+          if(part==12.||part==5.||aMeta.z>=9.)removeBackground=true;
+          if((part==1.||part==2.)&&distanceHall*uView.y>.05)removeBackground=true;
+          if(part==4.&&abs(distanceHall)<.2){
+            float index=aPivot.x-1.,q=floor(index/uPerLane),j=mod(index,uPerLane);
+            vec2 offset=uGrid.xy+vec2(q*uGrid.z,j*uGrid.w)-uWindow.xy;
+            float ahead=dot(offset,vec2(uView.y,uView.x)),right=dot(offset,vec2(uView.x,-uView.y));
+            if(ahead>.12*uWindow.w&&abs(right)<uScope.z*.87)removeBackground=true;
+          }
+        }
+        bool replaceRack=uOverlay<.5&&abs(vInfo.x-uRig.x)<.1&&(part==4.||part==5.)&&abs(aPivot.x-1.-uRig.y)<.1;
+        if(removeBackground||replaceRack||(part>=3.&&localCut<.002)||(part>=1.&&part<=2.&&phase>.999))gl_Position=vec4(4.,4.,4.,1.);
       }`;
     const fragment=`
       precision highp float;
       varying vec3 vColor,vWorld,vNormal,vTag;
-      varying float vGate;varying vec2 vInfo;
-      uniform float uPass,uCut,uTime,uLoad,uShadowScale,uCircuit;uniform vec4 uCuts,uAim;
+      varying float vGate;varying vec3 vInfo;
+      uniform float uPass,uCut,uTime,uLoad,uShadowScale,uCircuit;uniform vec4 uCuts,uAim,uRig,uWindow,uScope;uniform float uOverlay,uSource;
       uniform vec3 uSelection;
       uniform vec4 uView;
       uniform sampler2D uShadow;
@@ -647,11 +826,13 @@
       float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*4375.5453);}
       void main(){
         float part=vTag.y,mat=vTag.z;
+        bool realPanel=uRig.x>=0.&&part==10.&&abs(vInfo.x-uRig.x)<.2&&abs(vInfo.y-uScope.x-1.)<.2;
         if(part>=1.&&part<=2.&&vWorld.y>vGate)discard;
         float channel=mat>=13.?4.:mat==9.?1.:mat==11.?3.:2.;
         if(mat>=9.&&(uCircuit>4.5||uPass==2.))discard;
         if(uPass==1.){vec2 enc=fract(gl_FragCoord.z*vec2(1.,255.));enc.x-=enc.y/255.;gl_FragColor=vec4(enc,0.,1.);return;}
         if(uPass==2.){
+          if(uOverlay>.5||realPanel){gl_FragColor=vec4((realPanel?uSource:vInfo.y)/255.,0.,1./255.,1.);return;}
           float hit=(part==1.||part==2.)&&vTag.x==1.?16.+vInfo.x:part==4.&&vTag.x<20.?4.:vTag.x;
           gl_FragColor=vec4(hit/255.,part==4.?vInfo.y/255.:0.,0.,1.);return;
         }
@@ -694,6 +875,18 @@
           vec3 ds=vWorld-uAim.xyz;float local=exp(-dot(ds,ds)*.083);
           col+=vec3(.10,.22,.19)*local*(.46+fres);
         }
+        float role=uOverlay>.5?vInfo.z:realPanel?uScope.y:0.;
+        if(uRig.x>=0.&&uOverlay<.5&&!realPanel){
+          float gray=dot(col,vec3(.25,.57,.18));col=mix(vec3(gray*.81,gray*.91,gray),col,.34)*.81;
+        }
+        if(uOverlay>.5){
+          float fill=.77+.24*max(dot(n,eye),0.)+.12*top+.08*nd;
+          col=vColor*fill+vec3(.021,.034,.042)+.11*pow(max(dot(n,h),0.),18.);
+        }
+        if(role>.5){
+          vec3 tone=role<1.5?vec3(.99,.56,.19):role<2.5?vec3(.18,.86,.76):role<3.5?vec3(1.,.78,.30):vec3(.76,.91,1.);
+          col=mix(col,tone,role>=2.5?.60:.49)+tone*(.11+.15*fres);
+        }
         gl_FragColor=vec4(clamp(col,0.,1.),1.);
       }`;
     const shaders=[];
@@ -705,8 +898,8 @@
     const prog=gl.createProgram();gl.attachShader(prog,compile(gl.VERTEX_SHADER,vertex));gl.attachShader(prog,compile(gl.FRAGMENT_SHADER,fragment));gl.linkProgram(prog);
     if(!gl.getProgramParameter(prog,gl.LINK_STATUS))throw new Error('场景着色器连接失败');
     gl.useProgram(prog);
-    const vb=gl.createBuffer(),U={};
-    for(const n of ['View','Screen','Cut','Time','Pass','Load','ShadowScale','Selection','Shadow','Circuit','Cuts','Aim'])U[n]=gl.getUniformLocation(prog,'u'+n);
+    const vb=gl.createBuffer(),detailBuffer=gl.createBuffer(),U={};
+    for(const n of ['View','Screen','Cut','Time','Pass','Load','ShadowScale','Selection','Shadow','Circuit','Cuts','Aim','Rig','Pin','Pull','Scope','Window','Source','Overlay','Grid','PerLane'])U[n]=gl.getUniformLocation(prog,'u'+n);
     const attrs=[['aPos',3,0],['aColor',3,12],['aNormal',3,24],['aMeta',3,36],['aPivot',2,48]].map(([n,k,off])=>[gl.getAttribLocation(prog,n),k,off]);
     const shadowSize=Math.min(1536,gl.getParameter(gl.MAX_TEXTURE_SIZE));
     function texture(size,data){
@@ -721,32 +914,51 @@
     gl.bindFramebuffer(gl.FRAMEBUFFER,fb);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,shadow,0);
     gl.framebufferRenderbuffer(gl.FRAMEBUFFER,gl.DEPTH_ATTACHMENT,gl.RENDERBUFFER,rb);
     const hasShadow=gl.checkFramebufferStatus(gl.FRAMEBUFFER)===gl.FRAMEBUFFER_COMPLETE;gl.bindFramebuffer(gl.FRAMEBUFFER,null);
-    let count=0,lastShadow=-10;
+    let count=0,lastShadow=-10,model=null,detail=null;
+    function layer(buffer,n,overlay){
+      gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
+      for(const [a,k,offset] of attrs){gl.enableVertexAttribArray(a);gl.vertexAttribPointer(a,k,gl.FLOAT,false,56,offset);}
+      gl.uniform1f(U.Overlay,overlay);gl.drawArrays(gl.TRIANGLES,0,n);
+    }
+    function renderLayers(){
+      layer(vb,count,0);if(detail)layer(detailBuffer,detail.vertices.length/14,1);
+    }
     function draw(cam,selected,pick=false){
       gl.useProgram(prog);gl.bindBuffer(gl.ARRAY_BUFFER,vb);gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.disable(gl.DITHER);gl.disable(gl.BLEND);
-      for(const [a,n,o] of attrs){gl.enableVertexAttribArray(a);gl.vertexAttribPointer(a,n,gl.FLOAT,false,56,o);}
+      const active=cam.rig,geometry=model?.getRackRig(active)||null;
+      if(geometry!==detail){
+        detail=geometry;lastShadow=-10;
+        if(detail){gl.bindBuffer(gl.ARRAY_BUFFER,detailBuffer);gl.bufferData(gl.ARRAY_BUFFER,detail.vertices,gl.STATIC_DRAW);}
+      }
+      if(detail){
+        const [a,b]=detail.hinges,sz=detail.size;
+        gl.uniform4f(U.Rig,active.hallIndex,active.rackIndex,clamp(active.door||0,0,1),detail.selectedIndex);
+        gl.uniform4f(U.Pin,a[0],a[1],b[0],b[1]);gl.uniform4f(U.Pull,...detail.extractionVector,clamp(active.extraction||0,0,1));
+        gl.uniform4f(U.Window,...detail.center,Math.max(...sz));gl.uniform4f(U.Scope,detail.ownerRow,detail.rowRole,sz[1]*.85+sz[0]*.75,sz[2]*.80+sz[1]*.28);
+        gl.uniform1f(U.Source,detail.rowLocal);gl.uniform4fv(U.Grid,detail.grid);gl.uniform1f(U.PerLane,detail.perLane);
+      }else{gl.uniform4f(U.Rig,-10,-10,0,0);gl.uniform4f(U.Window,0,0,0,1);gl.uniform4f(U.Scope,-10,0,1,1);}
       gl.uniform4f(U.View,cam.ca,cam.sa,cam.sp,cam.cp);
       gl.uniform4f(U.Screen,2*cam.scale/cam.width,2*cam.scale/cam.height,2*cam.cx/cam.width-1,1-2*cam.cy/cam.height);
       gl.uniform4fv(U.Cuts,cam.cuts);gl.uniform4fv(U.Aim,cam.aim);gl.uniform1f(U.Circuit,cam.circuit);gl.uniform1f(U.Cut,cam.cut);gl.uniform1f(U.Time,cam.time);gl.uniform1f(U.Load,cam.load);gl.uniform3fv(U.Selection,cam.highlight);
       gl.uniform1i(U.Shadow,0);gl.uniform1f(U.ShadowScale,1.15/shadowSize);gl.activeTexture(gl.TEXTURE0);
-      const shadowStep=cam.cuts.reduce((sig,v)=>sig*31+Math.round(v*28),cam.circuit);
+      const shadowStep=cam.cuts.reduce((sig,v)=>sig*31+Math.round(v*28),cam.circuit)+(detail?String(Math.round(Math.atan2(cam.sa,cam.ca)*7))+'/'+Math.round((active.door||0)*10)+'/'+Math.round((active.extraction||0)*9):'');
       if(hasShadow&&shadowStep!==lastShadow){
         gl.bindTexture(gl.TEXTURE_2D,fallback);gl.bindFramebuffer(gl.FRAMEBUFFER,fb);gl.viewport(0,0,shadowSize,shadowSize);
         gl.clearColor(1,1,1,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
-        gl.uniform1f(U.Pass,1);gl.drawArrays(gl.TRIANGLES,0,count);gl.bindFramebuffer(gl.FRAMEBUFFER,null);lastShadow=shadowStep;
+        gl.uniform1f(U.Pass,1);renderLayers();gl.bindFramebuffer(gl.FRAMEBUFFER,null);lastShadow=shadowStep;
       }
       gl.bindTexture(gl.TEXTURE_2D,hasShadow?shadow:fallback);gl.viewport(0,0,canvas.width,canvas.height);gl.clearColor(0,0,0,0);
       gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
-      gl.uniform1f(U.Pass,pick?2:0);gl.drawArrays(gl.TRIANGLES,0,count);
+      gl.uniform1f(U.Pass,pick?2:0);renderLayers();
     }
-    return {draw,upload(model){gl.bindBuffer(gl.ARRAY_BUFFER,vb);gl.bufferData(gl.ARRAY_BUFFER,model.vertices,gl.STATIC_DRAW);count=model.vertices.length/14;lastShadow=-10;},
-      pick(x,y,cam,selected){draw(cam,selected,true);const pix=new Uint8Array(4);gl.readPixels(clamp(Math.floor(x*canvas.width/cam.width),0,canvas.width-1),clamp(canvas.height-1-Math.floor(y*canvas.height/cam.height),0,canvas.height-1),1,1,gl.RGBA,gl.UNSIGNED_BYTE,pix);draw(cam,selected);return pix[1]?{key:pickKey(pix[0]),rack:pix[1]-1}:pickKey(pix[0]);},
-      dispose(){gl.deleteFramebuffer(fb);gl.deleteRenderbuffer(rb);gl.deleteTexture(shadow);gl.deleteTexture(fallback);gl.deleteBuffer(vb);for(const shader of shaders)gl.deleteShader(shader);gl.deleteProgram(prog);gl.getExtension('WEBGL_lose_context')?.loseContext();}};
+    return {draw,upload(next){model=next;gl.bindBuffer(gl.ARRAY_BUFFER,vb);gl.bufferData(gl.ARRAY_BUFFER,model.vertices,gl.STATIC_DRAW);count=model.vertices.length/14;lastShadow=-10;},
+      pick(x,y,cam,selected){draw(cam,selected,true);const pix=new Uint8Array(4);gl.readPixels(clamp(Math.floor(x*canvas.width/cam.width),0,canvas.width-1),clamp(canvas.height-1-Math.floor(y*canvas.height/cam.height),0,canvas.height-1),1,1,gl.RGBA,gl.UNSIGNED_BYTE,pix);draw(cam,selected);if(pix[2]===1&&detail){const n=detail.assets[pix[0]];return n?{key:n.kind,nodeId:n.id,hall:cam.rig.hallIndex,rack:cam.rig.rackIndex}:null;}return pix[1]?{key:pickKey(pix[0]),rack:pix[1]-1}:pickKey(pix[0]);},
+      dispose(){gl.deleteFramebuffer(fb);gl.deleteRenderbuffer(rb);gl.deleteTexture(shadow);gl.deleteTexture(fallback);gl.deleteBuffer(vb);gl.deleteBuffer(detailBuffer);for(const shader of shaders)gl.deleteShader(shader);gl.deleteProgram(prog);gl.getExtension('WEBGL_lose_context')?.loseContext();}};
   }
   // The CPU renderer uses the same vertices, camera and per-pixel depth test.
   // Each visible pixel also records its component ID, including correct occlusion.
   function softwareRenderer(canvas){
-    const ctx=canvas.getContext('2d');let model,frame,pixels,depth,ids;
+    const ctx=canvas.getContext('2d');let model,frame,pixels,depth,ids,detail=null;
     const colorWord=(rgb,active)=>{
       const channel=(i)=>Math.round(255*clamp(active?rgb[i]*.904+[.033,.126,.111][i]:rgb[i],0,1));
       return (255<<24)|(channel(2)<<16)|(channel(1)<<8)|channel(0);
@@ -758,7 +970,11 @@
         depth=new Float32Array(width*height);ids=new Uint16Array(width*height);
       }
       pixels.fill(0);depth.fill(-Infinity);ids.fill(0);
-      const sx=width/cam.width,sy=height/cam.height;
+      const sx=width/cam.width,sy=height/cam.height,active=cam.rig;
+      const rig=model.getRackRig(active);
+      const roles=[null,[1,.57,.20],[.18,.87,.77],[1,.78,.30],[.78,.91,1]];
+      function wash(rgb,role){const target=roles[role];return colorWord(rgb.map((v,k)=>target?v*(role>=3?.55:.68)+target[k]*(role>=3?.59:.40):v*1.06+.024),false);}
+      if(rig!==detail){detail=rig;if(detail)for(const f of detail.faces){f.ink=wash(f.rgb.map(v=>Math.min(1,v*1.14+.023)),f.rigRole);f.activeInk=f.ink;}}
       function triangle(a,b,c,ink,id){
         const edgeX=b[0]-a[0],edgeY=b[1]-a[1],sideX=c[0]-a[0],sideY=c[1]-a[1];
         const det=edgeX*sideY-edgeY*sideX;if(Math.abs(det)<.002)return;
@@ -777,8 +993,21 @@
         }
       }
       const phase=Array.from({length:4},(_,h)=>[cutState(1,h,cam.cuts[h]),cutState(2,h,cam.cuts[h])]);
-      for(const face of model.faces){
+      const layers=detail?[model.faces,detail.faces]:[model.faces];
+      for(const layer of layers)for(const face of layer){
         const {part,hall,mat}=face,zone=face.group||0,isOuter=part===1||part===2;
+        const overlay=Boolean(face.rigId),owner=detail&&hall===active.hallIndex;
+        if(owner&&!overlay&&(part===4||part===5)&&face.instance===active.rackIndex)continue;
+        const panel=owner&&!overlay&&part===10&&face.instance===detail.ownerRow;
+        if(detail&&!overlay){
+          if(part===12||part===5||mat>=9||((part===1||part===2)&&(hall-active.hallIndex)*cam.sa>.05))continue;
+          if(owner&&part===4){
+            const rr=model.plan.dims[hall].rackPoints[face.instance];if(rr){
+              const dx=rr.pos[0]-detail.center[0],dy=rr.pos[1]-detail.center[1],sz=detail.size;
+              if(dx*cam.sa+dy*cam.ca>.12*Math.max(...sz)&&Math.abs(dx*cam.ca-dy*cam.sa)<(sz[1]*.85+sz[0]*.75)*.87)continue;
+            }
+          }
+        }
         if(part>=3&&cam.cuts[hall]<.002)continue;
         const channel=mat>=13?4:mat===9?1:mat===11?3:2;if(mat>=9&&cam.circuit===5)continue;
         const cs=isOuter?phase[hall][part-1]:null;
@@ -795,23 +1024,31 @@
         }
         const pt=face.pivot,angle=pt?cam.time*3.35+pt[0]*.2+pt[1]*.14:0,csA=pt?Math.cos(angle):0,snA=pt?Math.sin(angle):0;
         const p=points.map(v=>{
-          let w=v;if(pt){const x=v[0]-pt[0],y=v[1]-pt[1];w=[pt[0]+csA*x-snA*y,pt[1]+snA*x+csA*y,v[2]];}
+          let w=v;
+          if(overlay&&(part===7||part===11)){
+            const side=part===7?0:1,hinge=detail.hinges[side],a=(side?-1:1)*1.46*clamp(active.door||0,0,1);
+            const x=v[0]-hinge[0],y=v[1]-hinge[1];w=[hinge[0]+Math.cos(a)*x-Math.sin(a)*y,hinge[1]+Math.sin(a)*x+Math.cos(a)*y,v[2]];
+          }
+          if(overlay&&part===8&&face.rigId===detail.selectedIndex)w=along(w,detail.extractionVector,clamp(active.extraction||0,0,1));
+          if(pt){const x=v[0]-pt[0],y=v[1]-pt[1];w=[pt[0]+csA*x-snA*y,pt[1]+snA*x+csA*y,v[2]];}
           if(cs&&cs.lift)w=[w[0],w[1],w[2]+cs.lift];
           const q=projectPoint(w,cam);q[0]*=sx;q[1]*=sy;return q;
         });
         const focusNear=cam.aim[3]===zone&&zone>0&&Math.hypot(face.points[0][0]-cam.aim[0],face.points[0][1]-cam.aim[1])<3;
         let ink=(zone>0&&cam.highlight[family(zone)-1]>.35)||focusNear?face.activeInk:face.ink;
+        if(detail&&!overlay&&!panel)ink=face.contextInk;
+        if(panel&&detail.rowRole)ink=wash(face.rgb,detail.rowRole);
         if(mat>=9&&cam.load>0){
           if(Math.cos((face.flow-cam.time*8)*.55)>.6)ink=mat===9?0xff72ceff:mat===10?0xffc5f69e:mat===11?0xffffbe7f:mat===12?0xffe4a9ef:mat===13?0xfff2b5d0:0xffffdfc7;
         }
         if(mat>=9&&cam.circuit!==0&&cam.circuit!==channel)ink=0xff41382e;
-        const id=mat>=9?-1:isOuter&&zone===1?16+hall:part===4?((zone<20?4:zone)|((face.instance+1)<<5)):zone;
+        const id=overlay||panel?0x8000|(panel?detail.rowLocal:face.rigId):mat>=9?-1:isOuter&&zone===1?16+hall:part===4?((zone<20?4:zone)|((face.instance+1)<<5)):zone;
         for(let i=1;i<p.length-1;i++)triangle(p[0],p[i],p[i+1],ink,id);
       }
       ctx.putImageData(frame,0,0);
     }
-    return {draw,upload(m){model=m;for(const f of model.faces){f.ink=colorWord(f.rgb,false);f.activeInk=colorWord(f.rgb,true);}},
-      pick(x,y,cam){const id=ids&&ids[Math.floor(y*canvas.height/cam.height)*canvas.width+Math.floor(x*canvas.width/cam.width)];return id>31?{key:pickKey(id&31),rack:(id>>5)-1}:pickKey(id);},
+    return {draw,upload(m){model=m;for(const f of model.faces){f.ink=colorWord(f.rgb,false);f.activeInk=colorWord(f.rgb,true);const l=.25*f.rgb[0]+.57*f.rgb[1]+.18*f.rgb[2];f.contextInk=colorWord(f.rgb.map((v,i)=>(.66*l*[.81,.91,1][i]+.34*v)*.81),false);}},
+      pick(x,y,cam){const id=ids&&ids[Math.floor(y*canvas.height/cam.height)*canvas.width+Math.floor(x*canvas.width/cam.width)];if(id&0x8000){const n=detail?.assets[id&0x7fff];return n?{key:n.kind,nodeId:n.id,hall:cam.rig.hallIndex,rack:cam.rig.rackIndex}:null;}return id>31?{key:pickKey(id&31),rack:(id>>5)-1}:pickKey(id);},
       dispose(){model=frame=pixels=depth=ids=null;}};
   }
 
@@ -845,6 +1082,43 @@
     let wanted={yaw,pitch,zoom,fx:0,fy:0,fz:0};const highlight=[0,0,0],cuts=[0,0,0,0];
     let travel=null,focusKey=null,aim=[0,0,0,0],returnView=null,lastPick=null,restorePending=null;
     const cameraKeys=['yaw','pitch','zoom','fx','fy','fz'];
+    let queuedRack;
+    const rackView=GridRackView.mount(wrapper,{
+      getRoom:()=>({project,model,hallIndex:openIndex}),
+      moveCamera:rackCamera,captureCamera:()=>{
+        const state=cameraState();
+        if(cutTarget===1&&cut<.5)state.camera={...wanted};
+        return state;
+      },
+      restoreCamera:view=>{
+        cancelTravel();focusKey=null;aim=[0,0,0,0];
+        wanted={...view.camera};requestDraw();
+      },
+      redraw:requestDraw,onChange:options.onRackChange
+    });
+    function rackCamera({pts,angle,pitch:tilt,kind}){
+      if(!pts.length)return;
+      cancelTravel();
+      const width=wrapper.clientWidth||800,height=wrapper.clientHeight||400;
+      const cs=Math.cos(angle),sn=Math.sin(angle),sp=Math.sin(tilt),cp=Math.cos(tilt);
+      const projected=pts.map(([x,y,z])=>[x*cs-y*sn,(x*sn+y*cs)*sp-z*cp]);
+      const edges=axis=>[Math.min(...projected.map(p=>p[axis])),Math.max(...projected.map(p=>p[axis]))];
+      const [x0,x1]=edges(0),[y0,y1]=edges(1);
+      const base=Math.min(width/190,height/Math.max(107,15+165*sp));
+      const zoomTarget=clamp(Math.min(width*(kind==='circuit'?.72:.70)/Math.max(.18,x1-x0),height*.71/Math.max(.22,y1-y0))/base,.7,320);
+      const z=pts.reduce((acc,p)=>acc+p[2],0)/pts.length,midX=(x0+x1)*.5,depth=((y0+y1)*.5+z*cp)/sp;
+      const dest={yaw:yaw+Math.atan2(Math.sin(angle-yaw),Math.cos(angle-yaw)),pitch:tilt,zoom:zoomTarget,fx:midX*cs+depth*sn,fy:depth*cs-midX*sn,fz:z};
+      if(media.matches){wanted=dest;({yaw,pitch,zoom,fx,fy,fz}=dest);}
+      else{travel={start:{yaw,pitch,zoom,fx,fy,fz},dest,at:performance.now(),ms:kind==='circuit'?730:640,resolve:()=>{}};wanted=dest;}
+      requestDraw();
+    }
+    function openRack(slot,index){
+      if(mode!=='cutaway')return false;
+      if(!model||dirty){queuedRack={slot,index};requestDraw();return true;}
+      const opened=rackView.enter(index);
+      if(opened&&slot)rackView.selectSlot(slot);
+      return opened;
+    }
     function cancelTravel(){
       if(travel){const old=travel;travel=null;wanted={yaw,pitch,zoom,fx,fy,fz};old.resolve(false);}
     }
@@ -855,6 +1129,7 @@
     function getViewState(){return returnView?{...returnView,camera:{...returnView.camera}}:cameraState();}
     function restoreViewState(v){
       if(!v||v.version!==1||!v.camera||!cameraKeys.every(k=>Number.isFinite(v.camera[k]))||!['campus','cutaway'].includes(v.mode))return false;
+      if(rackView.rig)rackView.clear();
       if(!model||dirty){restorePending=v;requestDraw();return true;}
       cancelTravel();returnView=null;lastPick=null;focusKey=null;aim=[0,0,0,0];
       let index=model.plan.dims.findIndex(h=>h.index+1===v.hallNumber);if(index<0)index=clamp(Math.trunc(v.openIndex)||0,0,model.plan.dims.length-1);
@@ -909,13 +1184,13 @@
     }else useSoftware();
     function select(key,notify){
       const next=zones.indexOf(key)>0?key:null;
-      if(next!==selected){selected=next;focus(next);requestDraw();}
+      if(next!==selected){rackView.clear();selected=next;focus(next);requestDraw();}
       if(notify&&next&&typeof options.onSelect==='function') options.onSelect(next);
     }
     const hallInfo=document.createElement('div'),hallMenu=document.createElement('select'),hallNote=document.createElement('span');
     hallInfo.style.cssText='position:absolute;z-index:2;left:9px;bottom:9px;max-width:calc(100% - 56px);display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px;padding:4px 7px;background:#0d1c29e8;border:1px solid #35515e;border-radius:5px;color:#bfd0d6;font:500 10px/1.3 system-ui,"PingFang SC",sans-serif;';
     hallMenu.setAttribute('aria-label','切换剖视机房');hallMenu.style.cssText='font:inherit;color:#b2dfd5;background:#142c34;border:1px solid #36555a;border-radius:3px;padding:1px 2px;cursor:pointer;color-scheme:dark';
-    hallMenu.addEventListener('change',()=>{openIndex=Number(hallMenu.value);focus(selected);requestDraw();});
+    hallMenu.addEventListener('change',()=>{rackView.clear();openIndex=Number(hallMenu.value);focus(selected);requestDraw();});
     const relation=document.createElement('span');relation.style.cssText='padding-left:5px;color:#bfd3d7;border-left:1px solid #3b535c;';
     const lineLegend=document.createElement('span');
     lineLegend.style.cssText='display:flex;gap:6px;align-items:center;flex-wrap:wrap;';
@@ -947,6 +1222,11 @@
     function handleHit(hit){
       const key=typeof hit==='string'?hit:hit?.key;
       if(!key)return;
+      if(mode==='cutaway'&&rackView.hit(hit))return;
+      if(mode==='cutaway'&&(key==='rack'||key.startsWith('rack:')||key==='psu')){
+        openRack(key==='psu'?1:null,typeof hit==='object'?hit.rack:undefined);return;
+      }
+      if(rackView.rig)return;
       const picked=typeof hit==='object'&&Number.isInteger(hit.rack)?model.plan.dims[openIndex]?.rackPoints[hit.rack]:null;
       lastPick=picked?{key,pos:picked.pos}:null;
       if(mode==='campus'&&(key==='it'||key.startsWith('hall-'))){openHall(key.startsWith('hall-')?Number(key.slice(5)):undefined);return;}
@@ -974,6 +1254,12 @@
       wrapper.append(label);labels[key]=label;
     }
     function positionLabels(){
+      if(rackView.rig){
+        for(const l of Object.values(labels))l.style.display='none';
+        hallInfo.hidden=true;hallInfo.style.display='none';
+        rackView.positionTags(cam,projectPoint);return;
+      }
+      hallInfo.hidden=false;hallInfo.style.display='flex';
       const h=model.plan.dims[openIndex],cutaway=mode==='cutaway',used=[];
       for(const key of labelKeys){
         const lab=labels[key],unit=Boolean(equipmentTitles[key]),anchor=unit?h.points[key]:model.anchors[key];
@@ -1007,14 +1293,15 @@
     }
     function rebuild(){
       const c=project.config||{};
-      const sig=JSON.stringify([c.it,c.pue,c.density,c.cooling,c.architecture,metrics.facility,metrics.racks,metrics.layout,project.rackMix]);
+      const sig=JSON.stringify([c.it,c.pue,c.density,c.cooling,c.architecture,metrics.facility,metrics.racks,metrics.layout,project.rackMix,project.rackStudy,project.id]);
       if(sig!==signature||!model){
-        signature=sig;model=buildCampus(project,metrics);renderer.upload(model);
+        rackView.clear();signature=sig;model=buildCampus(project,metrics);renderer.upload(model);
         openIndex=clamp(openIndex,0,model.plan.dims.length-1);
         hallMenu.replaceChildren(...model.plan.dims.map((h,i)=>{const o=document.createElement('option');o.value=String(i);o.textContent='第 '+format(h.index+1)+' 间';return o;}));
         if(mode==='cutaway'||selected)focus(selected);
       }
-      dirty=false;if(restorePending){const saved=restorePending;restorePending=null;restoreViewState(saved);}
+      dirty=false;if(queuedRack){const req=queuedRack;queuedRack=null;openRack(req.slot,req.index);}
+      if(restorePending){const saved=restorePending;restorePending=null;restoreViewState(saved);}
     }
     const approach=(value,target,t)=>Math.abs(target-value)<.00037?target:value+(target-value)*t;
     function draw(now){
@@ -1030,6 +1317,7 @@
         if(Math.abs(target-cuts[i])>.0001)cutting=true;
       }
       cut=cuts[openIndex];
+      const rackMoving=rackView.tick(dt,reduce,now);
       let arrived=null;
       if(travel){
         const progress=travel.ms?clamp((now-travel.at)/travel.ms,0,1):1,blend=eased(progress);
@@ -1049,20 +1337,20 @@
       }
       const ca=Math.cos(yaw),sa=Math.sin(yaw),sp=Math.sin(pitch),cp=Math.cos(pitch);
       const scale=Math.min(width/190,height/Math.max(107,15+165*sp))*zoom;
-      cam={width,height,cx:width*.5-(fx*ca-fy*sa)*scale,cy:height*.535-((fx*sa+fy*ca)*sp-fz*cp)*scale,scale,ca,sa,sp,cp,cut,time:activeTime,load,highlight,cuts,aim,circuit:circuitIds[circuit]};
+      cam={width,height,cx:width*.5-(fx*ca-fy*sa)*scale,cy:height*.535-((fx*sa+fy*ca)*sp-fz*cp)*scale,scale,ca,sa,sp,cp,cut,time:activeTime,load,highlight,cuts,aim,rig:rackView.rig,circuit:circuitIds[circuit]};
       const bgKey=[width,height,scale.toFixed(4),yaw.toFixed(4),pitch.toFixed(4),cam.cx.toFixed(2),cam.cy.toFixed(2)].join(',');
       if(bgKey!==groundKey){drawGround(ground,cam);groundKey=bgKey;}
       renderer.draw(cam,selected);
       positionLabels();if(arrived)arrived.resolve(true);
-      const transit=Boolean(travel)||cutting||yaw!==wanted.yaw||pitch!==wanted.pitch||zoom!==wanted.zoom||fx!==wanted.fx||fy!==wanted.fy||fz!==wanted.fz||highlight.some((v,i)=>v!==(zones[i+1]===selected?1:0));
+      const transit=rackMoving||Boolean(travel)||cutting||yaw!==wanted.yaw||pitch!==wanted.pitch||zoom!==wanted.zoom||fx!==wanted.fx||fy!==wanted.fy||fz!==wanted.fz||highlight.some((v,i)=>v!==(zones[i+1]===selected?1:0));
       if(transit||moving){
         const fps=cpu?(transit?19:10):(transit?60:30),delay=1000/fps-(performance.now()-now);
         if(delay>15)delayed=setTimeout(()=>{delayed=0;requestDraw();},delay-5);else requestDraw();
       }else prev=0;
     }
     function requestDraw(){if(!disposed&&!scheduled&&!document.hidden&&inViewport){if(delayed){clearTimeout(delayed);delayed=0;}scheduled=requestAnimationFrame(draw);}}
-    function zoomBy(factor){if(Number.isFinite(factor)&&factor>0){cancelTravel();wanted.zoom=clamp(wanted.zoom*factor,.52,24);requestDraw();}}
-    function reset(){focus(null);requestDraw();}
+    function zoomBy(factor){if(Number.isFinite(factor)&&factor>0){cancelTravel();rackView.cancelTour();wanted.zoom=clamp(wanted.zoom*factor,.52,rackView.rig?320:24);requestDraw();}}
+    function reset(){if(rackView.rig){rackView.leave();return;}focus(null);requestDraw();}
     const pointers=new Map();let gesture=null,dragged=false;
     function startGesture(){
       const pts=Array.from(pointers.values());
@@ -1070,14 +1358,14 @@
     }
     wrapper.addEventListener('pointerdown',e=>{
       if(e.target.closest('button,select')||e.button!==0)return;
-      cancelTravel();if(!pointers.size)dragged=false;else dragged=true;
+      cancelTravel();rackView.cancelTour();if(!pointers.size)dragged=false;else dragged=true;
       pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});wrapper.setPointerCapture(e.pointerId);
       wrapper.style.cursor='grabbing';startGesture();
     });
     wrapper.addEventListener('pointermove',e=>{
       if(!pointers.has(e.pointerId)||!gesture)return;
       pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});const pts=Array.from(pointers.values());
-      if(pts[1]&&gesture.span>0){wanted.zoom=clamp(gesture.zoom*Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y)/gesture.span,.52,24);requestDraw();return;}
+      if(pts[1]&&gesture.span>0){wanted.zoom=clamp(gesture.zoom*Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y)/gesture.span,.52,rackView.rig?320:24);requestDraw();return;}
       const dx=e.clientX-gesture.x,dy=e.clientY-gesture.y;
       if(Math.abs(dx)+Math.abs(dy)>3)dragged=true;
       if(dragged){wanted.yaw=gesture.yaw+dx*.008;wanted.pitch=clamp(gesture.pitch+dy*.006,.24,1.18);requestDraw();}
@@ -1096,7 +1384,7 @@
     wrapper.addEventListener('wheel',e=>{e.preventDefault();zoomBy(Math.exp(-clamp(e.deltaY,-180,180)*.00165));},{passive:false});
     wrapper.addEventListener('keydown',e=>{
       if(e.target.closest('button,select'))return;
-      switch(e.key){case 'ArrowLeft':wanted.yaw-=.10;break;case 'ArrowRight':wanted.yaw+=.10;break;case 'ArrowUp':wanted.pitch=clamp(wanted.pitch+.075,.24,1.18);break;case 'ArrowDown':wanted.pitch=clamp(wanted.pitch-.075,.24,1.18);break;case '+':case '=':zoomBy(1.15);break;case '-':zoomBy(1/1.15);break;case 'Home':reset();break;default:return;}
+      switch(e.key){case 'Escape':if(!rackView.rig)return;rackView.leave();break;case 'ArrowLeft':wanted.yaw-=.10;break;case 'ArrowRight':wanted.yaw+=.10;break;case 'ArrowUp':wanted.pitch=clamp(wanted.pitch+.075,.24,1.18);break;case 'ArrowDown':wanted.pitch=clamp(wanted.pitch-.075,.24,1.18);break;case '+':case '=':zoomBy(1.15);break;case '-':zoomBy(1/1.15);break;case 'Home':reset();break;default:return;}
       e.preventDefault();requestDraw();
     });
     const observer=typeof ResizeObserver==='function'?new ResizeObserver(requestDraw):null;
@@ -1109,12 +1397,14 @@
     media.addEventListener?.('change',motionChanged);document.addEventListener('visibilitychange',visibilityChanged);
     requestDraw();
     return {update(data={}){project=data.project||{};metrics=data.metrics||{};dirty=true;requestDraw();},
-      setMode(value){if((value==='cutaway'||value==='campus')&&mode!==value){mode=value;cutTarget=value==='cutaway'?1:0;focus(selected);requestDraw();}},
+      setMode(value){if((value==='cutaway'||value==='campus')&&mode!==value){rackView.clear();queuedRack=null;mode=value;cutTarget=value==='cutaway'?1:0;focus(selected);requestDraw();}},
       setPlaying(value){const next=Boolean(value);if(next!==playing){playing=next;prev=0;requestDraw();}},
-      setCircuit(key){if(Object.hasOwn(circuitIds,key)&&key!==circuit){circuit=key;requestDraw();}},
+      setCircuit(key){if(Object.hasOwn(circuitIds,key)&&key!==circuit){rackView.clear();circuit=key;requestDraw();}},
+      openRack,closeRack:rackView.leave,selectRackSlot:rackView.selectSlot,toggleRackView:rackView.toggleView,
+      toggleRackDoor:rackView.toggleDoor,toggleRackExtract:rackView.toggleExtract,focusRackStep:rackView.focusStep,
       focusEquipment,getViewState,restoreViewState,
       setSelected(key){select(key,false);},zoomBy,reset,resize:requestDraw,
-      destroy(){cancelTravel();disposed=true;clearTimeout(delayed);intersection?.disconnect();media.removeEventListener?.('change',motionChanged);document.removeEventListener('visibilitychange',visibilityChanged);if(observer)observer.disconnect();else window.removeEventListener('resize',requestDraw);cancelAnimationFrame(scheduled);renderer.dispose();wrapper.remove();}};
+      destroy(){disposed=true;rackView.clear();cancelTravel();clearTimeout(delayed);intersection?.disconnect();media.removeEventListener?.('change',motionChanged);document.removeEventListener('visibilitychange',visibilityChanged);if(observer)observer.disconnect();else window.removeEventListener('resize',requestDraw);cancelAnimationFrame(scheduled);renderer.dispose();wrapper.remove();}};
   }
   window.GridCampus=Object.freeze({mount});
 })();

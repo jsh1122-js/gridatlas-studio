@@ -228,7 +228,8 @@
     const allowed=['twin','equipment','overview','world','design','aidc','industry','energy','library'];
     const hash=location.hash.slice(1);
     const direct=/^equipment\/([a-z0-9:-]+(?:\/[a-zA-Z0-9_-]+)?)$/.exec(hash);
-    let id=direct?'equipment':hash;if(!allowed.includes(id))id='twin';
+    const intoRack=hash==='twin/rack';
+    let id=direct?'equipment':intoRack?'twin':hash;if(!allowed.includes(id))id='twin';
     const wasInspecting=inspection.open, target=history.state?.gridatlasInspect;
     const fromRoom=id==='equipment' && typeof target==='string' && twin && (activeRoute==='twin'||wasInspecting);
     const sequence=++inspectSequence;
@@ -252,6 +253,7 @@
         current().config.load=value;changed();
       }});
       if(!wasInspecting||entryRevision!==current().updatedAt)twin.update(current());
+      if(intoRack)twin.openRack();
       if(wasInspecting){
         twin.resumeFromInspection();
         if(entryFocus?.isConnected)entryFocus.focus({preventScroll:true});
@@ -278,7 +280,8 @@
       else if(id==='energy')energyContext();
     }
     document.title=({twin:'算电数字孪生',equipment:'设备剖解',overview:'算电选址工作台',world:'全球基础设施地图',design:'方案设计',aidc:'AIDC 数据台',industry:'电力行业数据库',energy:'电价与政策资料',library:'方案库'})[id]+' · 算电图研';
-    if(!fromRoom && !(wasInspecting && id==='twin'))scrollTo(0,0);
+    if(intoRack)requestAnimationFrame(()=>document.querySelector('.tw-visual').scrollIntoView({block:'start'}));
+    else if(!fromRoom && !(wasInspecting && id==='twin'))scrollTo(0,0);
   }
   function goto(id) {if(location.hash==='#'+id)route();else location.hash=id;}
   window.addEventListener('hashchange',route);

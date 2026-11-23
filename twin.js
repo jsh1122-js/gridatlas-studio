@@ -15,7 +15,22 @@
     let mode = 'campus', selected = null, station = null, active = false;
     const modeButtons = [...document.querySelectorAll('[data-twin-mode]')];
     const objectButtons = [...document.querySelectorAll('[data-object]')];
-    const planner=GridTwinPlan.mount({onApply:onPlan,onMix,onInspect,onCircuit:key=>campus?.setCircuit?.(key)});
+    const guideHost=$('rack-guide');
+    const guide=GridRackGuide.mount(guideHost,{
+      onSlot:slot=>campus?.selectRackSlot(slot),onBack:()=>campus?.closeRack(),
+      onToggleView:()=>campus?.toggleRackView(),onStep:step=>campus?.focusRackStep(step),
+      onToggleDoor:()=>campus?.toggleRackDoor(),onToggleExtract:()=>campus?.toggleRackExtract()
+    });
+    function syncRack(state){
+      guideHost.hidden=!state;
+      document.querySelector('.tw-visual').classList.toggle('tw-rack-active',Boolean(state));
+      guide.update(state);
+    }
+    function inspectTarget(key){
+      if(mode==='cutaway' && (key==='psu'||key==='rack'||key?.startsWith('rack:'))){campus?.openRack(key==='psu'?1:null);return;}
+      onInspect(key);
+    }
+    const planner=GridTwinPlan.mount({onApply:onPlan,onMix,onInspect:inspectTarget,onCircuit:key=>campus?.setCircuit?.(key)});
     const renderDetails = () => {
       const config = project.config;
       const showingStation = mode === 'territory' && station;
@@ -76,7 +91,7 @@
       } else {
         territory?.destroy();
         territory = null;
-        if (!campus) campus = GridCampus.mount($('campus'), {onSelect:selectCampus,onInspect,onOpenHall:()=>{selectCampus('it');changeMode('cutaway');}});
+        if (!campus) campus = GridCampus.mount($('campus'), {onRackChange:syncRack,onSelect:selectCampus,onInspect:inspectTarget,onOpenHall:()=>{selectCampus('it');changeMode('cutaway');}});
         campus.update({project, metrics});
         campus.setPlaying?.(playing);
         campus.setMode(mode);
@@ -167,7 +182,7 @@
     };
     document.addEventListener('fullscreenchange', syncExpanded);
     document.addEventListener('keydown', event => { if (event.key === 'Escape' && visual.classList.contains('tw-expanded')) exitExpanded(); });
-    $('drill').onclick = () => selected==='it' && mode==='campus' ? changeMode('cutaway') : onInspect(selected==='it'?'rack':selected);
+    $('drill').onclick = () => selected==='it' && mode==='campus' ? changeMode('cutaway') : inspectTarget(selected==='it'?'rack':selected);
     function showMotion(){
       $('motion').textContent=playing?'Ⅱ':'▷';
       $('motion').setAttribute('aria-label',playing?'暂停演示动效':'播放演示动效');
@@ -193,6 +208,7 @@
     });
     let beforeInspection;
     return {
+      openRack() {changeMode('cutaway');campus?.openRack();},
       async focusEquipment(key) {
         beforeInspection ??= campus?.getViewState?.();
         if(expanded())exitExpanded();
@@ -202,7 +218,7 @@
         const view=campus?.getViewState?.();
         return mode==='cutaway' && view?.hallNumber ? '机房 '+String(view.hallNumber).padStart(2,'0') : (mode==='cutaway'?'机房剖视':'园区');
       },
-      suspendForInspection() { campus?.setPlaying?.(false); territory?.setPlaying?.(false); },
+      suspendForInspection() { guide.pause?.();campus?.setPlaying?.(false); territory?.setPlaying?.(false); },
       resumeFromInspection() {
         if(beforeInspection)campus?.restoreViewState?.(beforeInspection);
         beforeInspection=null;
@@ -231,7 +247,7 @@
         renderScene();
       },
       pause() {
-        active = false; beforeInspection=null;
+        guide.pause?.();active = false; beforeInspection=null;
         if (expanded()) exitExpanded();
         request?.abort();
         request = null;
