@@ -88,13 +88,14 @@
   function coords(loc) {return fmtCoord(loc.lat,'N','S') + '  ' + fmtCoord(loc.lon,'E','W');}
   const publicUrl='https://jsh1122-js.github.io/gridatlas-studio/';
   $('#tw-share').addEventListener('click',async()=>{
+    const shareUrl=publicUrl+(twin?.getShareHash()||'#twin');
     try{
-      if(navigator.share && matchMedia('(pointer:coarse)').matches){await navigator.share({title:'算电图研 · 数据中心数字孪生',url:publicUrl});return;}
-      await navigator.clipboard.writeText(publicUrl);
+      if(navigator.share && matchMedia('(pointer:coarse)').matches){await navigator.share({title:'算电图研 · 数据中心数字孪生',url:shareUrl});return;}
+      await navigator.clipboard.writeText(shareUrl);
       notice('公开网址已复制，可直接发给别人。');
     }catch(err){
       if(err.name==='AbortError')return;
-      showDialog('分享网址','<label class="dlg-field">公开网站<input readonly value="'+publicUrl+'"></label>');
+      showDialog('分享网址','<label class="dlg-field">公开网站<input readonly value="'+shareUrl+'"></label>');
       const link=$('#dialog-body input');link.focus();link.select();
     }
   });
@@ -178,7 +179,7 @@
   equipmentPage.before(equipmentSlot);
   let inspectSequence=0, entryFocus, entryRevision, entryScroll=0;
   function loadEquipment(){
-    equipmentModule ||= Promise.all([import('./equipment/workbench.js'),import('./equipment/relations.js'),import('./equipment/viewer.js').then(m=>m.studioReady)])
+    equipmentModule ||= Promise.all([import('./equipment/workbench.js?v=c112c5a093'),import('./equipment/relations.js')])
       .catch(error=>{equipmentModule=null;throw error;});
     return equipmentModule;
   }
@@ -198,12 +199,12 @@
   }
   inspection.addEventListener('cancel',returnToRoom);
   $('#eq-return').addEventListener('click',returnToRoom);
-  async function inspectInRoom(target){
+  async function inspectInRoom(target,options={}){
     const sequence=++inspectSequence;
     const entry=document.activeElement;
     try{
-      await Promise.all([loadEquipment(),twin.focusEquipment(target.split('/')[0])]);
-      if(sequence!==inspectSequence || activeRoute!=='twin')return;
+      if(options.inPlace)await loadEquipment();else await Promise.all([loadEquipment(),twin.focusEquipment(target.split('/')[0])]);
+      if(sequence!==inspectSequence || activeRoute!=='twin'||(options.valid&&!options.valid()))return;
       entryFocus=entry; entryScroll=window.scrollY;
       history.pushState({gridatlasInspect:target},'','#equipment');route();
     }catch{if(sequence===inspectSequence){twin.resumeFromInspection();notice('设备暂未加载，可再次点选。');}}
@@ -229,7 +230,8 @@
     const hash=location.hash.slice(1);
     const direct=/^equipment\/([a-z0-9:-]+(?:\/[a-zA-Z0-9_-]+)?)$/.exec(hash);
     const intoRack=hash==='twin/rack';
-    let id=direct?'equipment':intoRack?'twin':hash;if(!allowed.includes(id))id='twin';
+    const intoDevice=/^twin\/device\/([a-z0-9-]+)$/.exec(hash);
+    let id=direct?'equipment':intoRack||intoDevice?'twin':hash;if(!allowed.includes(id))id='twin';
     const wasInspecting=inspection.open, target=history.state?.gridatlasInspect;
     const fromRoom=id==='equipment' && typeof target==='string' && twin && (activeRoute==='twin'||wasInspecting);
     const sequence=++inspectSequence;
@@ -253,7 +255,8 @@
         current().config.load=value;changed();
       }});
       if(!wasInspecting||entryRevision!==current().updatedAt)twin.update(current());
-      if(intoRack)twin.openRack();
+      if(!wasInspecting&&intoRack)twin.openRack();
+      if(!wasInspecting&&intoDevice)twin.observe(intoDevice[1]);
       if(wasInspecting){
         twin.resumeFromInspection();
         if(entryFocus?.isConnected)entryFocus.focus({preventScroll:true});
@@ -280,7 +283,7 @@
       else if(id==='energy')energyContext();
     }
     document.title=({twin:'算电数字孪生',equipment:'设备剖解',overview:'算电选址工作台',world:'全球基础设施地图',design:'方案设计',aidc:'AIDC 数据台',industry:'电力行业数据库',energy:'电价与政策资料',library:'方案库'})[id]+' · 算电图研';
-    if(intoRack)requestAnimationFrame(()=>document.querySelector('.tw-visual').scrollIntoView({block:'start'}));
+    if((intoRack||intoDevice)&&!wasInspecting)requestAnimationFrame(()=>document.querySelector('.tw-visual').scrollIntoView({block:'start'}));
     else if(!fromRoom && !(wasInspecting && id==='twin'))scrollTo(0,0);
   }
   function goto(id) {if(location.hash==='#'+id)route();else location.hash=id;}

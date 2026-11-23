@@ -17,7 +17,7 @@
   <link rel="stylesheet" href="station-view.css">
   <link rel="stylesheet" href="design.css">
   <link rel="stylesheet" href="twin.css?v=bea8b45280">
-  <link rel="stylesheet" href="twin-plan.css"><link rel="stylesheet" href="twin-rack-guide.css">
+  <link rel="stylesheet" href="twin-plan.css"><link rel="stylesheet" href="twin-rack-guide.css"><link rel="stylesheet" href="twin-device-links.css?v=ce4eb35622"><link rel="stylesheet" href="twin-observe.css?v=7d526b4385">
   <link rel="stylesheet" href="studio.css"><link rel="stylesheet" href="equipment/equipment.css"><link rel="stylesheet" href="equipment/fabric.css"><link rel="stylesheet" href="equipment/relations.css"><link rel="stylesheet" href="equipment/inspection.css">
   <script defer src="map-data.js"></script>
   <script defer src="map.js"></script>
@@ -34,10 +34,13 @@
   <script defer src="twin-rack-circuit.js"></script>
   <script defer src="twin-rack-guide.js"></script>
   <script defer src="twin-rack-view.js"></script>
-  <script defer src="twin-campus.js?v=4a70b91f5a"></script>
+  <script defer src="twin-yard.js?v=12e8f5e208"></script>
+  <script defer src="twin-device-links.js?v=26bc989364"></script>
+  <script defer src="twin-device-overlay.js?v=c5e411c369"></script>
+  <script defer src="twin-campus.js?v=77bc8f4b9f"></script>
   <script defer src="twin-territory.js"></script>
-  <script defer src="twin.js?v=3a48cddb5e"></script>
-  <script defer src="app.js?v=ad893b6d86"></script>
+  <script defer src="twin.js?v=00c0db8e3e"></script>
+  <script defer src="app.js?v=cda491d638"></script>
 </head>
 <body>
   <a href="#main" class="skip">跳到主要内容</a>
@@ -64,10 +67,12 @@
               <button type="button" data-twin-mode="cutaway" aria-pressed="false">机房剖视</button>
               <button type="button" data-twin-mode="territory" aria-pressed="false">区域电网</button>
             </div>
+            <button type="button" id="tw-yard-open" class="tw-yard-entry">变电站</button>
             <button id="tw-expand" type="button" aria-label="全屏查看场景" title="全屏查看场景" aria-pressed="false"><i data-i="expand"></i></button></div>
           </div>
           <div class="tw-stage">
             <div id="tw-campus" class="tw-viewport"></div><div id="tw-territory" class="tw-viewport" hidden></div>
+            <div id="tw-device-ink" hidden></div>
             <div id="tw-scene-detail" class="tw-scene-detail" hidden><strong id="tw-focus-name"></strong><span id="tw-focus-value"></span><button id="tw-drill" type="button" hidden>进入机房剖视 ›</button></div>
             <div class="tw-camera" aria-label="相机控制">
               <button type="button" id="tw-motion" aria-label="暂停演示动效">Ⅱ</button>
@@ -77,6 +82,7 @@
             </div>
           </div>
           <section id="tw-rack-guide" hidden aria-label="机柜供电讲解"></section>
+          <section id="tw-device-panel" hidden aria-label="设备联动"></section>
           <div class="tp-routes" id="tp-routes" hidden><div class="tp-trace-head"><span>追踪回路</span><div class="tp-switches" aria-label="选择回路"></div></div><div id="tp-chain" aria-label="沿回路查看设备"></div></div>
           <div class="tw-stage-foot"><span id="tw-scene-source">园区建筑与设备布局为方案示意</span><span class="tw-drag-hint"><i data-i="orbit"></i>拖动旋转 · 滚轮缩放</span></div>
         </section>

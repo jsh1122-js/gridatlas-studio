@@ -1,4 +1,4 @@
-import {createViewer} from './viewer.js';
+import {createViewer} from './viewer.js?v=f22e5f079c';
 import {serviceExhibit,serviceModes,serviceNames} from './rack-services.js';
 import {mountFabric} from './fabric.js';
 import {powerCategoryNames,powerSettings,powerDestination,powerExhibit} from './power-equipment.js';
@@ -204,7 +204,7 @@ export function mount({onChange,onPartChanged}={}) {
     }
     $('drill').textContent=isGpu?'返回'+unitLabel():isRack?'查看'+unitLabel()+'内部':'查看单颗 GPU';
   }
-  function draw(){
+  function draw(focusPart=false){
     if(!active)return;
     const focused=document.activeElement;
     const restoreFocus=['modes','objects','crumbs'].find(id=>$(id).contains(focused));
@@ -254,7 +254,7 @@ export function mount({onChange,onPartChanged}={}) {
     links.hidden=!links.childElementCount;
     crumbs();drillControls();
     viewer.show({...state});viewer.setLabels?.(Object.fromEntries(Object.entries(data.parts).map(([key,detail])=>[key,detail[0]])));fabric.update({...state});viewer.setExplode(split/100);viewer.setLoad(project.config.load/100);
-    paintDetail();motion();
+    paintDetail(focusPart);motion();
     if(restoreFocus){
       const focusTarget=$(restoreFocus).querySelector('[aria-pressed="true"],button')||$('detail-title');
       if(focusTarget.tagName!=='BUTTON')focusTarget.tabIndex=-1;
@@ -315,17 +315,20 @@ export function mount({onChange,onPartChanged}={}) {
     if(cat===state.category&&!sub&&!profile&&dest!=='800v')return true;
     history.push(view);if(history.length>32)history.shift();
     if(profile){state.profile=profile[1];previewProfile=state.profile!==GridRackStudy.clean(project.rackStudy).profile;state.unit=1;state.gpu=1;}
-    navigate(dest);
-    if(sub){if(!Object.hasOwn(data.parts,sub)){restoreView(history.pop());return false;}part=sub;paintDetail(true);}
+    if(!navigate(dest,sub,true)){restoreView(history.pop());return false;}
     return true;
   }
-  function navigate(key){
+  function navigate(key,sub,strict=false){
     const category=key==='800v'?'sst':key;
-    if(!Object.hasOwn(categories,category))return;
-    state.category=category;state.level='rack';part='frame';
+    if(!Object.hasOwn(categories,category))return false;
     const choices=powerSettings[category]||serviceModes[category];
-    state.operating=choices?(key==='800v'?'conventional':Object.keys(choices)[0]):null;
-    draw();
+    const operating=choices?(key==='800v'?'conventional':Object.keys(choices)[0]):null;
+    const next={...state,category,operating,level:'rack',architecture:project.config.architecture};
+    const validPart=sub&&Object.hasOwn(exhibit(next,project).parts,sub);
+    if(strict&&sub&&!validPart)return false;
+    Object.assign(state,next);part=validPart?sub:'frame';
+    draw(Boolean(validPart));
+    return true;
   }
   function motion(){
     const run=active&&!document.hidden;
@@ -373,7 +376,7 @@ export function mount({onChange,onPartChanged}={}) {
   return {
     open(next,target){
       const different=!project||project.id!==next.id;project=next;
-      Object.assign(state,GridRackStudy.clean(project.rackStudy));active=true;
+      Object.assign(state,GridRackStudy.clean(project.rackStudy));active=true;viewer.setActive(true);
       $('project').textContent=project.name;
       if(different){history.length=0;state.unit=1;state.gpu=1;state.condition='mains';state.operating=null;state.level='rack';state.category='rack';part='frame';}
       const n=numberState();state.unit=Math.min(state.unit,n.nodes);state.gpu=Math.min(state.gpu,n.perNode);
@@ -383,12 +386,11 @@ export function mount({onChange,onPartChanged}={}) {
       if(override){state.profile=override[1];state.unit=1;state.gpu=1;}
       const dest=override?'rack':direct==='cooling'?(project.config.cooling==='风冷'?'air':'liquid'):direct==='power'?powerDestination(project.config.architecture):direct==='it'?'rack':direct;
       if(dest&&(dest==='800v'||Object.hasOwn(categories,dest))){
-        history.length=0;navigate(dest);
-        if(sub&&Object.hasOwn(data.parts,sub)){part=sub;paintDetail(true);}
+        history.length=0;navigate(dest,sub);
       }else draw();
       showBom(project.aidc?.items);
     },
     focusTarget,captureView,restoreView,
-    pause(){active=false;fabric.pause();motion();closeExpanded();}
+    pause(){active=false;viewer.setActive(false);fabric.pause();motion();closeExpanded();}
   };
 }

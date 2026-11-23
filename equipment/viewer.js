@@ -60,18 +60,43 @@ function softwareView(canvas){
   }
   return {draw};
 }
+// Only inputs used to construct physical meshes belong in the model cache key.
+function modelKey(s){
+  const cat=s.category;
+  if(cat==='rack'){
+    const pcie=s.profile==='pcie';
+    if(s.level==='rack')return [cat,s.level,s.profile,s.unit,pcie?s.servers:0,pcie?s.cards:0].join('/');
+    if(s.level==='tray')return [cat,s.level,s.profile,s.unit,pcie?s.cards:0].join('/');
+    return [cat,s.level,s.profile,s.gpu].join('/');
+  }
+  if(cat==='ups')return cat+'/'+s.condition;
+  return [cat,s.operating,s.profile,s.architecture].join('/');
+}
 export function createViewer(host,{onPick,onEngine}={}){
   let canvas=document.createElement('canvas');canvas.tabIndex=0;canvas.setAttribute('aria-label','设备三维模型，拖动旋转，方向键调整视角，回车选择部件');host.replaceChildren(canvas);
   const badge=document.createElement('span');badge.className='eq-callout';badge.hidden=true;host.append(badge);
   const hover=document.createElement('span');hover.className='eq-hover';hover.hidden=true;host.append(hover);
-  let names={},lastHover=0,priorFrame=null,shadowDirty=true,badgeWidth=84;
+  let names={},lastHover=0,shadowDirty=true,badgeWidth=84;
+  let enabled=true,pending=null,shownKey=null;
+  const recent=new Map(),proxyMeshes=new WeakMap();
+  let fullResolution=true,cameraFrameTime=0;
+  function setProxyGeometry(m,useProxy){
+    if(!lowPowerGPU)return;
+    let entries=proxyMeshes.get(m);
+    if(!entries){
+      entries=[];
+      m.root.traverse(o=>{if(o.isMesh&&o.geometry.userData.compat)entries.push([o,o.geometry]);});
+      proxyMeshes.set(m,entries);
+    }
+    for(const [mesh,detailed] of entries)mesh.geometry=useProxy?detailed.userData.compat:detailed;
+  }
   const reduced=window.matchMedia('(prefers-reduced-motion: reduce)');
   let gl,soft,lowPowerGPU=false,shadowPad,grid,last=0,frame=0,visible=true,dead=false,dirty=true,model,state,selection,phase=0,load=.8,playing=!reduced.matches,orbit=false;
-  let split=0,splitTarget=0,targetView,transition=1,width=1,height=1,startPoint,accum=0,activeFrames=10;
+  let split=0,splitTarget=0,targetView,width=1,height=1,startPoint,accum=0,activeFrames=10;
   const scene=new T.Scene(),camera=new T.PerspectiveCamera(32,1,.03,120);
   const stage=new T.Group();scene.add(stage);
   let contact,contactTexture;
-  const dprLimit=()=>lowPowerGPU ? .84 : Math.min(devicePixelRatio||1,innerWidth<660?1.5:1.65);
+  const dprLimit=()=>lowPowerGPU ? (fullResolution ? .84 : .64) : Math.min(devicePixelRatio||1,innerWidth<660?1.5:1.65);
   try{
     gl=new T.WebGLRenderer({canvas,alpha:true,antialias:true,powerPreference:'high-performance'});
     const context=gl.getContext(),debugInfo=context.getExtension('WEBGL_debug_renderer_info');
@@ -110,7 +135,7 @@ export function createViewer(host,{onPick,onEngine}={}){
   });
   const controls=new OrbitControls(camera,canvas);controls.enableDamping=true;controls.dampingFactor=.095;controls.enablePan=false;controls.rotateSpeed=.68;controls.zoomSpeed=.78;controls.minDistance=1.45;controls.maxDistance=24;controls.maxPolarAngle=Math.PI*.51;
   let autoZoomFactor=1;
-  function queue(){dirty=true;activeFrames=Math.max(activeFrames,4);if(!dead&&visible&&!document.hidden&&!frame)frame=requestAnimationFrame(tick);}
+  function queue(){dirty=true;activeFrames=Math.max(activeFrames,4);if(enabled&&!dead&&visible&&!document.hidden&&!frame)frame=requestAnimationFrame(tick);}
   controls.addEventListener('start',()=>{targetView=null;activeFrames=20;queue();});controls.addEventListener('change',queue);
   function view(){
     if(!model)return;
@@ -133,25 +158,30 @@ export function createViewer(host,{onPick,onEngine}={}){
     return {look:center,eye:center.clone().addScaledVector(dir,distance*margin*autoZoomFactor)};
 
   }
+  function moveTo(wanted){
+    targetView=wanted;
+    cameraFrameTime=performance.now();
+  }
   function fit(instant=false){
     const wanted=view();if(!wanted)return;
     if(instant||reduced.matches){camera.position.copy(wanted.eye);controls.target.copy(wanted.look);controls.update();targetView=null;}
-    else targetView=wanted;
+    else moveTo(wanted);
     queue();
   }
   function resize(){
     const bounds=host.getBoundingClientRect();if(bounds.width<2||bounds.height<2)return;
+    if(width===bounds.width&&height===bounds.height&&(!gl||gl.getPixelRatio()===dprLimit()))return;
     const portraitChanged=(width/height<.95)!==(bounds.width/bounds.height<.95);
     width=bounds.width;height=bounds.height;camera.aspect=width/height;camera.updateProjectionMatrix();
-    if(gl){gl.setPixelRatio(dprLimit());gl.setSize(width,height,false);}
-    if(portraitChanged&&model)fit(true);queue();
+    if(gl)gl.setDrawingBufferSize(width,height,dprLimit());
+    if(portraitChanged&&model&&!pending)fit(reduced.matches);queue();
   }
   const observer=new ResizeObserver(resize);observer.observe(host);
   const intersection=new IntersectionObserver(entries=>{visible=entries[0].isIntersecting;if(visible){last=0;queue();}else{cancelAnimationFrame(frame);frame=0;}});
   intersection.observe(host);
   const signals=new AbortController(),listen={signal:signals.signal};
   document.addEventListener('visibilitychange',()=>{if(!document.hidden){last=0;queue();}},listen);
-  reduced.addEventListener('change',()=>{if(reduced.matches){orbit=false;playing=false;targetView=null;transition=1;split=splitTarget;}queue();},listen);
+  reduced.addEventListener('change',()=>{if(reduced.matches){orbit=false;playing=false;if(targetView){camera.position.copy(targetView.eye);controls.target.copy(targetView.look);controls.update();targetView=null;}split=splitTarget;}queue();},listen);
   const ray=new T.Raycaster(),uv=new T.Vector2();
   function pickAt(e){
     const bounds=canvas.getBoundingClientRect();
@@ -163,7 +193,7 @@ export function createViewer(host,{onPick,onEngine}={}){
   canvas.addEventListener('pointerleave',clearHover,listen);
   canvas.addEventListener('pointercancel',()=>{startPoint=null;clearHover();},listen);
   canvas.addEventListener('pointermove',e=>{
-    if(!model||e.pointerType!=='mouse'||e.buttons||startPoint||performance.now()-lastHover<65)return;
+    if(pending||!model||e.pointerType!=='mouse'||e.buttons||startPoint||performance.now()-lastHover<65)return;
     lastHover=performance.now();
     const key=pickAt(e),title=names[key]||label(key,state);
     if(!key||!title){clearHover();return;}
@@ -174,11 +204,11 @@ export function createViewer(host,{onPick,onEngine}={}){
   },listen);
   canvas.addEventListener('pointerdown',e=>{clearHover();startPoint=[e.clientX,e.clientY];},listen);
   canvas.addEventListener('pointerup',e=>{
-    if(!model||!startPoint||Math.hypot(e.clientX-startPoint[0],e.clientY-startPoint[1])>5){startPoint=null;return;}startPoint=null;
+    if(pending||!model||!startPoint||Math.hypot(e.clientX-startPoint[0],e.clientY-startPoint[1])>5){startPoint=null;return;}startPoint=null;
     const key=pickAt(e);if(key)onPick?.(key);
   },listen);
   canvas.addEventListener('keydown',e=>{
-    if(!model)return;
+    if(pending||!model)return;
     if(e.key==='Enter'){onPick?.(selection||(state.category==='rack'?'unit-1':'frame'));return;}
     if(e.key==='Home'){fit();e.preventDefault();return;}
     if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','+','=','-'].includes(e.key))return;
@@ -186,10 +216,12 @@ export function createViewer(host,{onPick,onEngine}={}){
     if(e.key==='ArrowLeft')sph.theta-=.13;if(e.key==='ArrowRight')sph.theta+=.13;
     if(e.key==='ArrowUp')sph.phi-=.1;if(e.key==='ArrowDown')sph.phi+=.1;sph.phi=limited(sph.phi,.1,controls.maxPolarAngle);
     if(e.key==='+'||e.key==='=')sph.radius/=1.15;if(e.key==='-')sph.radius*=1.15;
-    targetView={look:controls.target.clone(),eye:vec().setFromSpherical(sph).add(controls.target)};e.preventDefault();queue();
+    moveTo({look:controls.target.clone(),eye:vec().setFromSpherical(sph).add(controls.target)});e.preventDefault();queue();
   },listen);
   let labelAnchor=null;
   function setSelected(key,displayLabel,{focus=false}={}){
+    if(pending){pending.part={key,displayLabel,focus};return;}
+    if(!focus&&key===selection&&labelAnchor&&(!displayLabel||displayLabel===badge.textContent))return;
     selection=key;model?.select(key);
     const part=model?.parts.get(key),name=displayLabel||names[key]||label(key,state);
     badge.hidden=!part||!name;labelAnchor=null;
@@ -203,22 +235,57 @@ export function createViewer(host,{onPick,onEngine}={}){
           const ratio=limited(bb.getSize(vec()).length()/Math.max(.01,model.size.length()),0,1);
           const look=model.center.clone().lerp(center,.81);
           const axis=camera.position.clone().sub(controls.target).normalize();
-          targetView={look,eye:look.clone().addScaledVector(axis,limited(baseDist*(.50+.50*ratio),controls.minDistance,controls.maxDistance))};
+          moveTo({look,eye:look.clone().addScaledVector(axis,limited(baseDist*(.50+.50*ratio),controls.minDistance,controls.maxDistance))});
           if(reduced.matches){camera.position.copy(targetView.eye);controls.target.copy(look);controls.update();targetView=null;}
         }
       }
     }
     queue();
   }
-  function snapshot(){
-    priorFrame?.remove();priorFrame=null;
-    if(reduced.matches||!model||!visible||width<2||height<2)return;
-    const source=compatCanvas||canvas;
-    if(gl)gl.render(scene,camera);
-    const layer=document.createElement('canvas'),scale=Math.min(1,1024/source.width);
-    layer.width=Math.max(1,Math.round(source.width*scale));layer.height=Math.max(1,Math.round(source.height*scale));
-    layer.getContext('2d').drawImage(source,0,0,layer.width,layer.height);layer.className='eq-last-frame';
-    layer.setAttribute('aria-hidden','true');host.insertBefore(layer,badge);priorFrame=layer;
+  function activatePending(){
+    const request=pending;
+    pending=null;
+    const first=!model,previous=state;
+    const swap=request.key!==shownKey;
+    if(swap){
+      let next=recent.get(request.key);
+      if(next)recent.delete(request.key);
+      else next=buildModel(request.state);
+      if(model){
+        stage.remove(model.root);
+        recent.set(shownKey,model);
+      }
+      model=next;shownKey=request.key;
+      const capacity=lowPowerGPU||soft?2:3;
+      while(recent.size>capacity){
+        const [oldest,evicted]=recent.entries().next().value;
+        recent.delete(oldest);
+        evicted.dispose();
+      }
+      model.root.position.y=0;
+      model.root.scale.setScalar(1);
+      model.tick(phase,split,load);
+      stage.add(model.root);
+      selection=null;labelAnchor=null;shadowDirty=true;
+      if(!request.part)model.select(null);
+      if(contact){contact.position.set(model.center.x,-.012,model.center.z);contact.scale.set(model.size.x*1.75,model.size.z*1.7,1);}
+    }
+    state=request.state;
+    const changedScale=first||state.category!==previous.category||state.level!==previous.level||state.profile!==previous.profile;
+    if(changedScale){
+      autoZoomFactor=1;
+      // Interpolate from the visible pose, including when another switch interrupts the camera.
+      fit(first||reduced.matches);
+    }
+    if(request.part)setSelected(request.part.key,request.part.displayLabel,{focus:request.part.focus});
+    if(request.camera)restoreCamera(request.camera,first);
+    clearHover();
+  }
+  function restoreCamera(saved,instant=false){
+    const eye=vec().fromArray(saved.eye),look=vec().fromArray(saved.look);
+    if(instant||reduced.matches){camera.position.copy(eye);controls.target.copy(look);controls.update();targetView=null;}
+    else moveTo({eye,look});
+    queue();
   }
   function updateBadge(){
     const part=model?.parts.get(selection);if(!part||!labelAnchor)return;
@@ -227,24 +294,36 @@ export function createViewer(host,{onPick,onEngine}={}){
     badge.hidden=false;badge.style.left=limited(x+14,8,width-badgeWidth-8)+'px';badge.style.top=limited(y-25,7,height-28)+'px';
   }
   function tick(now){
-    frame=0;if(dead||document.hidden||!visible||!model)return;
+    frame=0;if(!enabled||dead||document.hidden||!visible||(!model&&!pending))return;
+    const switched=Boolean(pending);
+    if(switched)activatePending();
     const delta=last?Math.min(.10,(now-last)/1000):0;last=now;accum+=delta;
     const continuous=playing&&load>0&&model.hasFlow&&!reduced.matches;
-    const moving=targetView||Math.abs(split-splitTarget)>.001||transition<1||orbit||activeFrames>0;
+    const moving=targetView||Math.abs(split-splitTarget)>.001||orbit||activeFrames>0;
     const interval=soft||lowPowerGPU?(moving?1/24:1/12):(moving?1/55:1/28);
-    if(accum>=interval||!delta){
+    if(switched||accum>=interval||!delta){
       const dt=Math.min(.12,accum);accum=0;
-      if(targetView){const blend=reduced.matches?1:1-Math.exp(-dt*8);camera.position.lerp(targetView.eye,blend);controls.target.lerp(targetView.look,blend);if(camera.position.distanceToSquared(targetView.eye)<1e-5&&controls.target.distanceToSquared(targetView.look)<1e-5)targetView=null;}
+      // Use elapsed wall time so a slow GPU does not stretch a short camera move over several seconds.
+      const cameraDt=cameraFrameTime?Math.max(0,(now-cameraFrameTime)/1000):1/60;
+      cameraFrameTime=now;
+      if(targetView){const blend=reduced.matches||cameraDt>.32?1:1-Math.exp(-cameraDt*13);camera.position.lerp(targetView.eye,blend);controls.target.lerp(targetView.look,blend);if(camera.position.distanceToSquared(targetView.eye)<1e-5&&controls.target.distanceToSquared(targetView.look)<1e-5)targetView=null;}
       if(orbit&&!reduced.matches){const off=camera.position.clone().sub(controls.target);off.applyAxisAngle(vec(0,1,0),dt*.22);camera.position.copy(controls.target).add(off);}
       const previous=split;split+= (splitTarget-split)*(reduced.matches?1:1-Math.exp(-dt*10));if(Math.abs(split-splitTarget)<.001)split=splitTarget;
       if(continuous)phase+=dt*(.2+.8*load);
-      if(transition<1){transition=Math.min(1,transition+dt*2.4);const v=1-Math.pow(1-transition,3);model.root.position.y=-.024*(1-v);model.root.scale.setScalar(.985+.015*v);}
-      model.tick(phase,split,load);controls.update();scene.updateMatrixWorld(true);camera.updateMatrixWorld();updateBadge();
-      if(gl){if(previous!==split||transition<1||shadowDirty)gl.shadowMap.needsUpdate=true;gl.render(scene,camera);shadowDirty=false;}else soft.draw(model,camera,width,height);
-      if(priorFrame){
-        const layer=priorFrame;priorFrame=null;
-        layer.animate([{opacity:1},{opacity:0}],{duration:180,easing:'ease-out',fill:'both'}).finished.then(()=>layer.remove(),()=>layer.remove());
+      if(lowPowerGPU&&gl){
+        const detailedNow=!orbit&&!targetView&&split===splitTarget;
+        if(detailedNow!==fullResolution){
+          fullResolution=detailedNow;
+          gl.setDrawingBufferSize(width,height,dprLimit());
+        }
+        // Simplify rounded edges only while travelling. The settled close-up uses the authored meshes.
+        const useProxy=!detailedNow;
+        if(switched||model.root.userData.proxyView!==useProxy){
+          setProxyGeometry(model,useProxy);model.root.userData.proxyView=useProxy;
+        }
       }
+      model.tick(phase,split,load);controls.update();scene.updateMatrixWorld(true);camera.updateMatrixWorld();updateBadge();
+      if(gl){if(previous!==split||shadowDirty)gl.shadowMap.needsUpdate=true;gl.render(scene,camera);shadowDirty=false;}else soft.draw(model,camera,width,height);
       activeFrames=Math.max(0,activeFrames-1);dirty=false;
     }
     if(!frame&&(continuous||moving||activeFrames>0||dirty))frame=requestAnimationFrame(tick);
@@ -252,27 +331,35 @@ export function createViewer(host,{onPick,onEngine}={}){
   resize();
   return {
     show(next){
-      if(state&&JSON.stringify(state)===JSON.stringify(next))return;
-      const first=!model,keep=state && next.category===state.category && next.level===state.level&&next.profile===state.profile;
-      if(!keep)snapshot();clearHover();state={...next};shadowDirty=true;
-      if(model){stage.remove(model.root);model.dispose();}
-      model=buildModel(state);stage.add(model.root);transition=reduced.matches||keep?1:0;selection=null;labelAnchor=null;badge.hidden=true;
-      if(contact){contact.position.set(model.center.x,-.012,model.center.z);contact.scale.set(model.size.x*1.75,model.size.z*1.7,1);}
-      if(!keep){autoZoomFactor=1;fit(true);if(!first&&!reduced.matches){const dest=view();camera.position.sub(dest.look).multiplyScalar(1.065).add(dest.look);targetView=dest;}}queue();
+      const key=modelKey(next);
+      if(pending?.key===key){pending.state={...next};return;}
+      if(!pending&&shownKey===key){state={...next};return;}
+      // Keep the last rendered image in place until the newest request is ready for this frame.
+      pending={key,state:{...next}};
+      clearHover();badge.hidden=true;
+      queue();
+    },
+    setActive(value){
+      enabled=Boolean(value);
+      if(enabled){last=0;queue();}
+      else{cancelAnimationFrame(frame);frame=0;clearHover();}
     },
     select:setSelected,
     setLabels(next){names=next||{};},
-    captureView(){return {eye:camera.position.toArray(),look:controls.target.toArray()};},
+    captureView(){
+      if(pending)return pending.camera||null;
+      return model?{eye:camera.position.toArray(),look:controls.target.toArray()}:null;
+    },
     restoreView(saved){
       if(!saved||![saved.eye,saved.look].every(v=>Array.isArray(v)&&v.length===3&&v.every(Number.isFinite)))return;
-      camera.position.fromArray(saved.eye);controls.target.fromArray(saved.look);targetView=null;controls.update();queue();
+      if(pending)pending.camera=saved;else restoreCamera(saved);
     },
-    setExplode(value){splitTarget=limited(Number(value)||0,0,1);queue();},
-    setLoad(value){load=limited(Number(value)||0,0,1);queue();},
-    setPlaying(value){playing=Boolean(value);queue();},
-    setOrbit(value){orbit=Boolean(value);queue();},
-    zoomBy(f){if(!Number.isFinite(f)||f<=0)return;const dir=camera.position.clone().sub(controls.target);const dist=limited(dir.length()/f,controls.minDistance,controls.maxDistance);targetView={look:controls.target.clone(),eye:controls.target.clone().addScaledVector(dir.normalize(),dist)};queue();},
+    setExplode(value){const next=limited(Number(value)||0,0,1);if(next!==splitTarget){splitTarget=next;queue();}},
+    setLoad(value){const next=limited(Number(value)||0,0,1);if(next!==load){load=next;queue();}},
+    setPlaying(value){if(playing!==Boolean(value)){playing=Boolean(value);queue();}},
+    setOrbit(value){if(orbit!==Boolean(value)){orbit=Boolean(value);queue();}},
+    zoomBy(f){if(!Number.isFinite(f)||f<=0)return;const dir=camera.position.clone().sub(controls.target);const dist=limited(dir.length()/f,controls.minDistance,controls.maxDistance);moveTo({look:controls.target.clone(),eye:controls.target.clone().addScaledVector(dir.normalize(),dist)});queue();},
     reset(){autoZoomFactor=1;fit();},
-    destroy(){dead=true;cancelAnimationFrame(frame);controls.dispose();signals.abort();observer.disconnect();intersection.disconnect();model?.dispose();contactTexture?.dispose();contact?.geometry.dispose();contact?.material.dispose();shadowPad?.geometry.dispose();shadowPad?.material.dispose();grid?.geometry.dispose();grid?.material.dispose();if(initialRenderer){initialRenderer.dispose();if(gl)gl.forceContextLoss();}host.replaceChildren();}
+    destroy(){dead=true;cancelAnimationFrame(frame);controls.dispose();signals.abort();observer.disconnect();intersection.disconnect();pending=null;model?.dispose();for(const item of recent.values())item.dispose();recent.clear();contactTexture?.dispose();contact?.geometry.dispose();contact?.material.dispose();shadowPad?.geometry.dispose();shadowPad?.material.dispose();grid?.geometry.dispose();grid?.material.dispose();if(initialRenderer){initialRenderer.dispose();if(gl)gl.forceContextLoss();}host.replaceChildren();}
   };
 }

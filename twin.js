@@ -21,16 +21,96 @@
       onToggleView:()=>campus?.toggleRackView(),onStep:step=>campus?.focusRackStep(step),
       onToggleDoor:()=>campus?.toggleRackDoor(),onToggleExtract:()=>campus?.toggleRackExtract()
     });
+    let observing=null,rackState=null,watchRevision=0,observationConfig='',previewing=null,closeView=false,yardUnit=1;
+    const visual=document.querySelector('.tw-visual');
+    const overlay=GridDeviceOverlay.mount($('device-ink'),key=>observe(key));
+    const panel=GridDeviceLinks.mount($('device-panel'),{
+      onSelect:key=>observe(key),onBack:()=>{
+        if(observing){
+          const yard=observing.key.startsWith('sub-');
+          clearObservation();
+          if(yard)changeMode('campus');
+        }else if(rackState)campus?.closeRack();
+      },
+      onPreview:link=>{
+        previewing=link;overlay.preview(link);
+        if(!observing&&rackState&&link){
+          const next=rackState.slotId?'psu':'rack';observe(next,{preview:link});
+        }else if(observing){
+          closeView=false;panel.setCloseView(false);frameObservation();
+        }
+      },
+      onView:(near,d)=>{
+        if(!observing)observe(d.key);
+        closeView=near;panel.setCloseView(near);frameObservation();
+      },
+      onDetail:(target,d)=>{
+        if(d.key==='rack'||d.key==='psu'){
+          if(mode!=='cutaway')changeMode('cutaway');
+          if(rackState && d.key==='psu')campus?.selectRackSlot(rackState.slotId||1);
+          else campus?.openRack(d.key==='psu'?1:null);
+          return;
+        }
+        const revision=watchRevision;onInspect(target,{inPlace:true,valid:()=>revision===watchRevision});
+      }
+    });
+    function configForDevice(){
+      const units=Math.min(4,Math.max(2,Math.round(2+Math.log2(metrics.facility/80))));
+      yardUnit=Math.min(yardUnit,units);
+      return {architecture:project.config.architecture,cooling:project.config.cooling,yardUnits:units,yardUnit,
+        profile:rackState?.rack.profile??GridRackStudy.clean(project.rackStudy).profile};
+    }
+    function updateProjection(){
+      if(!observing||!campus)return;
+      overlay.draw(keys=>campus.getEquipmentProjection(keys));
+    }
+    function paintObservation(d){
+      const c=configForDevice();panel.update(d.key,c);
+      overlay.update(d);overlay.setPlaying(playing);
+      visual.classList.add('tw-observing');
+      $('scene-source').textContent='连线表示设备间的功能关系与传递方向';updateProjection();
+    }
+    function clearObservation(restore=true){
+      ++watchRevision;observing=null;previewing=null;closeView=false;panel.clear();overlay.update(null);visual.classList.remove('tw-observing');
+      if(restore)campus?.clearEquipmentFocus();
+      if(mode!=='territory')$('scene-source').textContent=mode==='cutaway'?'机柜为代表性示意，规划数量按方案折算':'园区建筑与设备布局为方案示意';
+    }
+    function frameObservation(){
+      if(!observing)return;
+      const links=previewing?[previewing]:observing.links.filter(l=>l.kind!=='reference');
+      const peers=closeView?[]:[...new Set(links.map(l=>l.key))];
+      campus?.moveToEquipment(observing.key,{peers});
+    }
+    function observe(input,options={}){
+      if(!project)return;
+      if(typeof input!=='string')return;
+      const k=input.split('/')[0];
+      const key=GridDeviceLinks.resolveSceneKey(k==='power'?'sub-transformer':k==='cooling'?'liquid':k,configForDevice());
+      const unit=/^sub-transformer(?:-([2-4]))?$/.exec(key);
+      if(unit)yardUnit=Number(unit[1]||1);
+      const cfg=configForDevice(),d=GridDeviceLinks.describe(key,cfg);if(!d)return;
+      const peers=[...new Set(d.links.filter(link=>link.kind!=='reference').map(link=>link.key))];
+      const openRoom=!key.startsWith('sub-')||peers.some(p=>!p.startsWith('sub-'));
+      if(mode==='territory')changeMode(openRoom?'cutaway':'campus');
+      else if(openRoom&&mode==='campus')changeMode('cutaway');
+      ++watchRevision;observing=d;previewing=options.preview||null;
+      closeView=false;observationConfig=JSON.stringify(cfg);paintObservation(d);panel.setCloseView?.(false);if(previewing)overlay.preview(previewing);
+      frameObservation();
+    }
     function syncRack(state){
-      guideHost.hidden=!state;
-      document.querySelector('.tw-visual').classList.toggle('tw-rack-active',Boolean(state));
+      const previous=rackState;rackState=state;
+      guideHost.hidden=!state;visual.classList.toggle('tw-rack-active',Boolean(state));
       guide.update(state);
+      if(state){
+        if(observing)clearObservation(false);
+        if(!previous||Boolean(previous.slotId)!==Boolean(state.slotId))panel.update(state.slotId?'psu':'rack',configForDevice());
+      }else if(!observing)panel.clear();
     }
     function inspectTarget(key){
       if(mode==='cutaway' && (key==='psu'||key==='rack'||key?.startsWith('rack:'))){campus?.openRack(key==='psu'?1:null);return;}
-      onInspect(key);
+      observe(key);
     }
-    const planner=GridTwinPlan.mount({onApply:onPlan,onMix,onInspect:inspectTarget,onCircuit:key=>campus?.setCircuit?.(key)});
+    const planner=GridTwinPlan.mount({onApply:onPlan,onMix,onInspect:inspectTarget,onCircuit:key=>{if(observing)clearObservation();campus?.setCircuit?.(key);}});
     const renderDetails = () => {
       const config = project.config;
       const showingStation = mode === 'territory' && station;
@@ -91,19 +171,20 @@
       } else {
         territory?.destroy();
         territory = null;
-        if (!campus) campus = GridCampus.mount($('campus'), {onRackChange:syncRack,onSelect:selectCampus,onInspect:inspectTarget,onOpenHall:()=>{selectCampus('it');changeMode('cutaway');}});
+        if (!campus) campus = GridCampus.mount($('campus'), {onRackChange:syncRack,onProjectionChange:updateProjection,onHallChange:()=>clearObservation(false),onSelect:selectCampus,onInspect:inspectTarget,onOpenHall:()=>{selectCampus('it');changeMode('cutaway');}});
         campus.update({project, metrics});
         campus.setPlaying?.(playing);
         campus.setMode(mode);
         campus.setCircuit?.(planner.getCircuit());
         campus.setSelected(selected);
       }
-      $('scene-source').textContent = {campus:'园区建筑与设备布局为方案示意', cutaway:'机柜为代表性示意，规划数量按方案折算', territory:'设施位置来自 OSM，距离按场址至站点代表点计算'}[mode];
+      if(!observing)$('scene-source').textContent = {campus:'园区建筑与设备布局为方案示意', cutaway:'机柜为代表性示意，规划数量按方案折算', territory:'设施位置来自 OSM，距离按场址至站点代表点计算'}[mode];
       planner.renderRoutes(mode);
       renderDetails();
     }
     function changeMode(nextMode) {
       if (mode !== nextMode) {
+        if(observing)clearObservation();
         mode = nextMode;
         if(mode==='cutaway')onPreload?.();
         if (mode !== 'territory') selectStation(null);
@@ -160,7 +241,6 @@
         if (active && !controller.signal.aborted) { nearData = {status:'unavailable',rows:[]}; renderStations(); territory?.update({project, metrics, stations:nearData}); }
       }).finally(() => { if (request === controller) request = null; });
     }
-    const visual = document.querySelector('.tw-visual');
     const expanded = () => document.fullscreenElement === visual || visual.classList.contains('tw-expanded');
     function syncExpanded() {
       const full = expanded();
@@ -183,21 +263,26 @@
     document.addEventListener('fullscreenchange', syncExpanded);
     document.addEventListener('keydown', event => { if (event.key === 'Escape' && visual.classList.contains('tw-expanded')) exitExpanded(); });
     $('drill').onclick = () => selected==='it' && mode==='campus' ? changeMode('cutaway') : inspectTarget(selected==='it'?'rack':selected);
+    $('yard-open').onclick=()=>observe('sub-transformer');
     function showMotion(){
+      overlay.setPlaying(playing);
       $('motion').textContent=playing?'Ⅱ':'▷';
       $('motion').setAttribute('aria-label',playing?'暂停演示动效':'播放演示动效');
       $('motion').title=$('motion').getAttribute('aria-label');
     }
     $('motion').onclick=()=>{playing=!playing;campus?.setPlaying?.(playing);territory?.setPlaying?.(playing);showMotion();};
     showMotion();
-    modeButtons.forEach(btn => btn.onclick = () => changeMode(btn.dataset.twinMode));
+    modeButtons.forEach(btn => btn.onclick = () => {if(observing)clearObservation();changeMode(btn.dataset.twinMode);});
     objectButtons.forEach(btn => btn.onclick = () => {
       if (mode === 'territory') changeMode('campus');
+      if(observing)clearObservation();
       selectCampus(btn.dataset.object);
+      if(btn.dataset.object==='power')observe('sub-transformer');
     });
     for (const btn of document.querySelectorAll('[data-camera]')) btn.onclick = () => {
       const view = mode === 'territory' ? territory : campus;
-      if (btn.dataset.camera === 'home') view?.reset(); else view?.zoomBy(btn.dataset.camera === 'in' ? 1.2 : 1 / 1.2);
+      if (btn.dataset.camera === 'home' && observing) clearObservation();
+      else if (btn.dataset.camera === 'home') view?.reset(); else view?.zoomBy(btn.dataset.camera === 'in' ? 1.2 : 1 / 1.2);
     };
     $('load').addEventListener('input', event => onLoad(event.target.valueAsNumber));
     $('all-stations').addEventListener('click', event => {
@@ -208,7 +293,8 @@
     });
     let beforeInspection;
     return {
-      openRack() {changeMode('cutaway');campus?.openRack();},
+      observe, getShareHash(){return observing?'#twin/device/'+observing.key:rackState?'#twin/rack':'#twin';},
+      openRack() {if(observing)clearObservation(false);changeMode('cutaway');campus?.openRack();},
       async focusEquipment(key) {
         beforeInspection ??= campus?.getViewState?.();
         if(expanded())exitExpanded();
@@ -218,16 +304,17 @@
         const view=campus?.getViewState?.();
         return mode==='cutaway' && view?.hallNumber ? '机房 '+String(view.hallNumber).padStart(2,'0') : (mode==='cutaway'?'机房剖视':'园区');
       },
-      suspendForInspection() { guide.pause?.();campus?.setPlaying?.(false); territory?.setPlaying?.(false); },
+      suspendForInspection() { guide.pause?.();overlay.setPlaying(false);campus?.setPlaying?.(false); territory?.setPlaying?.(false); },
       resumeFromInspection() {
         if(beforeInspection)campus?.restoreViewState?.(beforeInspection);
-        beforeInspection=null;
+        beforeInspection=null;if(rackState)guide.update(rackState);overlay.setPlaying(playing);
         campus?.setPlaying?.(playing); territory?.setPlaying?.(playing);
       },
       update(nextProject) {
         active = true;
         const projectChanged = project?.id !== nextProject.id;
         project = nextProject;
+        if(projectChanged&&observing)clearObservation(false);
         metrics = GridDesign.calculate(project.config);
         try {metrics.layout=GridSpacePlan.calculate(project.config,project.rackStudy,project.spacePlan);} catch {metrics.layout=null;}
         planner.update(project,metrics.layout,mode);
@@ -245,9 +332,10 @@
         $('aux-bar').style.width = (metrics.average ? 100 - 100 / pue : 0) + '%';
         queryStations();
         renderScene();
+        if(observing && JSON.stringify(configForDevice())!==observationConfig)observe(observing.key);
       },
       pause() {
-        guide.pause?.();active = false; beforeInspection=null;
+        clearObservation(false);guide.pause?.();active = false; beforeInspection=null;
         if (expanded()) exitExpanded();
         request?.abort();
         request = null;
