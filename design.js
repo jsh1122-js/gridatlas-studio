@@ -36,12 +36,15 @@
       values[key] = valid(n) ? n : NaN;
     }
     const { it, pue, load, density, tariff, green } = values;
+    // A weighted rack density can round a whole-cabinet quotient a few ULPs above the integer.
+    const rackRatio = it * 1000 / density, nearestRack = Math.round(rackRatio);
+    const wholeRack = nearestRack > 0 && Math.abs(rackRatio - nearestRack) <= Math.min(0.25, 4 * Number.EPSILON * rackRatio);
     const facility = it * pue;
     const average = facility * load / 100;
     const energy = average * 8.76;
     return {
       facility,
-      racks: Math.ceil(it * 1000 / density),
+      racks: wholeRack ? nearestRack : Math.ceil(rackRatio),
       energy,
       cost: energy * tariff / 100,
       average,
@@ -53,6 +56,8 @@
 
   const powerPaths = {
     '交流 UPS': [['grid', '电网接入'], ['transformer', '配电变压器'], ['ups', '交流 UPS'], ['rack', 'IT 机柜']],
+    'SST 800V 直流': [['grid','中压交流接入'],['converter','SST 隔离变换'],['bus','800V 直流母线'],['rack','机架侧 DC/DC']],
+    '集中式 HVDC': [['grid','交流接入'],['transformer','配电变压器'],['converter','集中整流与母线'],['rack','直流 IT 负载']],
     '800V 直流': [['grid', '电网接入'], ['converter', '变压整流'], ['bus', '800V 直流母线'], ['rack', '机柜 DC/DC']]
   };
   const coolingPaths = {

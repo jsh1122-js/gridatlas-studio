@@ -70,6 +70,14 @@
     if(frame.hasAttribute('src'))frame.contentWindow?.postMessage({type:'gridatlas-twin-context',averageMW:GridDesign.calculate(current().config).average},location.origin);
   }
   function changed() {
+    const p=current();
+    if(p.rackMix){
+      const mix=GridRackMix.summarize(p.rackMix);
+      if(p.config.it!==mix.itMW || p.config.density!==mix.density){
+        delete p.rackMix;
+        notice('IT 规模或单柜功率已修改，原机柜组合已解除。');
+      }
+    }
     current().updatedAt=new Date().toISOString();
     persist();
     if(activeRoute==='twin')twin?.update(current());
@@ -78,6 +86,18 @@
   const num = (n,d=2) => n.toLocaleString('zh-CN',{maximumFractionDigits:d});
   const fmtCoord = (n,positive,negative) => Math.abs(n).toFixed(5) + '°' + (n<0?negative:positive);
   function coords(loc) {return fmtCoord(loc.lat,'N','S') + '  ' + fmtCoord(loc.lon,'E','W');}
+  const publicUrl='https://jsh1122-js.github.io/gridatlas-studio/';
+  $('#tw-share').addEventListener('click',async()=>{
+    try{
+      if(navigator.share && matchMedia('(pointer:coarse)').matches){await navigator.share({title:'算电图研 · 数据中心数字孪生',url:publicUrl});return;}
+      await navigator.clipboard.writeText(publicUrl);
+      notice('公开网址已复制，可直接发给别人。');
+    }catch(err){
+      if(err.name==='AbortError')return;
+      showDialog('分享网址','<label class="dlg-field">公开网站<input readonly value="'+publicUrl+'"></label>');
+      const link=$('#dialog-body input');link.focus();link.select();
+    }
+  });
   function notice(message) {
     const el=$('#toast');clearTimeout(notice.timer);el.textContent=message;el.hidden=false;
     notice.timer=setTimeout(()=>el.hidden=true,2600);
@@ -162,7 +182,14 @@
     for(const page of all('.page'))page.hidden=page.id!==id;
     for(const a of all('[data-route]')){if(a.dataset.route===id)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');}
     if(id==='twin'){
-      if(!twin)twin=GridTwin.mount({onInspect:part=>{equipmentTarget=part;goto('equipment');},onLoad:value=>{
+      if(!twin)twin=GridTwin.mount({onPlan:plan=>{
+        const p=current();
+        if(p.rackMix && (p.config.it!==plan.config.it || p.config.density!==plan.config.density))delete p.rackMix;
+        p.config=plan.config;p.rackStudy=plan.rackStudy;p.spacePlan=plan.spacePlan;changed();
+      },onMix:(rows,totals)=>{
+        const p=current();p.rackMix=GridRackMix.clean(rows);
+        p.config={...p.config,it:totals.itMW,density:totals.density};changed();
+      },onInspect:part=>{equipmentTarget=part;goto('equipment');},onLoad:value=>{
         if(!Number.isFinite(value)||value<0||value>100)return;
         current().config.load=value;changed();
       }});
@@ -212,7 +239,7 @@
       if(!['site','scene'].includes(mode) || !loc || !Number.isFinite(loc.lat) || Math.abs(loc.lat)>90 ||
         !Number.isFinite(loc.lon) || Math.abs(loc.lon)>180 || !config || typeof config!=='object')return;
       const next={...current().config};
-      for(const k of ['it','load','green','tariff','pue'])if(Object.hasOwn(config,k))next[k]=config[k];
+      for(const k of ['it','load','green','tariff','pue','architecture','cooling'])if(config[k]!==undefined)next[k]=config[k];
       if(!GridDesign.validateConfig(next)){notice('来源参数超出方案支持的范围');return;}
       const snap=$('#aidc-frame').contentWindow?.GridAidcProject?.getSnapshot();
       if(snap)current().aidc=GridIO.cleanAidc(snap);

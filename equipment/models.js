@@ -1,4 +1,5 @@
 import * as T from './vendor/three.module.min.js';
+import {buildPower} from './power-models.js';
 
 import {RoundedBoxGeometry} from './vendor/RoundedBoxGeometry.js';
 const cube=new T.BoxGeometry(1,1,1);
@@ -99,7 +100,7 @@ export function buildModel(s) {
     box(k,x,y,z-d/2+.02,w-.10,h-.10,.035,'dark');
   }
   function grip(k,x,y,z,length=.12){for(const dy of [-1,1])box(k,x,y+dy*length/2,z,.035,.04,.10,'silver');box(k,x,y,z+.05,.04,length,.035,'trim');}
-  const gb=s.profile==='gb200',nodes=gb?18:s.servers,gpus=gb?4:s.cards;
+  const gb=s.profile==='gb200'||s.profile==='gb300',ultra=s.profile==='gb300',nodes=gb?18:s.servers,gpus=gb?4:s.cards;
   const isRack=s.category==='rack';
   if(isRack && s.level==='rack') {
     groups('frame');groups('fabric',[.53,0,-.30]);groups('power',[-.34,.23,0]);groups('cooling',[.45,0,-.25]);
@@ -142,7 +143,7 @@ export function buildModel(s) {
       for(let j=0;j<14;j++)box('fabric',-.56+j*.087,3.74,.76,.058,.056,.032,'silver');
     }
     for(let i=0;i<8;i++)pipe('fabric',[[-.29+i*.08,.45,-.90],[-.37+i*.09,1.51,-1.01],[-.28+i*.08,2.70,-.92]],.016,gb?'copper':'purple');
-    sign('frame',gb?'GB200  /  NVL72':'PCIe  /  COMPUTE',0,3.99,.916,1.24);
+    sign('frame',gb?(ultra?'GB300  /  NVL72':'GB200  /  NVL72'):'PCIe  /  COMPUTE',0,3.99,.916,1.24);
   } else if(isRack && s.level==='tray') {
     groups('frame',[0,-.19,0]);groups('fabric',[.30,.12,-.30]);groups('cooling',[0,.65,.10]);groups('cpu',[0,.20,0]);
     box('frame',0,.18,0,3.55,.12,2.42,'steel');box('frame',0,.27,0,3.42,.075,2.28,'pcb');
@@ -166,7 +167,7 @@ export function buildModel(s) {
     }
     for(const x of [-1.60,1.60])for(const z of [-.97,-.35,.36,.98])screw('frame',x,.34,z);
     if(gb){
-      marking('frame','COMPUTE BOARD   REV / REF',0,.317,.99,.98);
+      marking('frame',ultra?'GB300   /   BLACKWELL ULTRA':'COMPUTE BOARD   REV / REF',0,.317,.99,.98);
       for(let j=0;j<2;j++){const x= j?1.32:-1.32;box('cpu',x,.37,0,.39,.12,.55,'silver');}
       for(let i=0;i<2;i++){const x=i?.72:-.72;pipe('cooling',[[x-.17,.53,-.76],[x-.23,.57,-.36],[x+.13,.56,.05],[x+.18,.54,.74]],.037,i?'hot':'blue',true);}
     }
@@ -183,13 +184,22 @@ export function buildModel(s) {
       box('substrate',x-.039,.327,z,.019,.008,.040,'silver');
     }
     for(let i=0;i<12;i++)for(let j=0;j<9;j++)cyl('substrate',-.78+i*.142,.14,-.58+j*.145,.045,.04,'brass');
-    marking('package',gb?'BLACKWELL  /  GPU':'ACCELERATOR  /  GPU',0,.573,0,1.03,'#424951');
+    if(ultra){
+      groups('hbm',[.43,.32,0]);
+      for(const x of [-.69,.69])for(const z of [-.45,-.15,.15,.45]){
+        box('hbm',x,.526,z,.145,.072,.17,'green');
+        box('hbm',x,.568,z,.13,.016,.15,'chip');
+      }
+    }
+    marking('package',ultra?'BLACKWELL ULTRA':gb?'BLACKWELL  /  GPU':'ACCELERATOR  /  GPU',0,.573,0,1.03,'#424951');
     marking('substrate','MODULE  /  REFERENCE',0,.295,.76,.91);
     if(gb){box('thermal',0,.64,0,1.65,.11,1.39,'copper');
       for(const x of [-.70,.70])for(const z of [-.54,.54])screw('thermal',x,.707,z,.054);
       for(let j=0;j<12;j++)box('thermal',-.55+j*.10,.702,.36,.026,.007,.24,'dark');
       marking('thermal','COLD PLATE  /  GPU '+String(s.gpu).padStart(2,'0'),0,.703,0,1.22,'#493529');for(let j=0;j<2;j++){const x=j?.61:-.61;pipe('thermal',[[x,.72,-.43],[x,.93,-.56],[x,.95,-1.03]],.075,j?'hot':'blue');cyl('thermal',x,.74,-.44,.18,.10,'brass');}}
     else {box('thermal',0,.64,0,1.73,.11,1.43,'copper');for(let j=0;j<26;j++)box('thermal',-.75+j*.06,.82,0,.029,.32,1.35,'silver');}
+  } else if(['transformer','switchgear','sst','hvdc'].includes(s.category)){
+    buildPower(s,{groups,box,cyl,rod,pipe,housing,sign,grip,screw});
   } else if(s.category==='ups'){
     groups('frame');groups('input',[-.37,.12,0]);groups('rectifier',[0,.22,.44]);groups('battery',[-.72,0,.23]);groups('inverter',[0,-.08,.65]);groups('bypass',[.45,.20,.04]);groups('output',[.46,0,.23]);
     housing('frame',.19,1.44,0,2.03,2.86,1.32);housing('battery',-1.45,1.17,0,.94,2.32,1.20);

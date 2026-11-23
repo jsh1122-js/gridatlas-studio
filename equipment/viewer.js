@@ -6,7 +6,14 @@ import {buildModel} from './models.js';
 const vec=(x=0,y=0,z=0)=>new T.Vector3(x,y,z);
 const limited=(n,lo,hi)=>Math.max(lo, Math.min(hi,n));
 const labels={frame:'设备框架',fabric:'互联与交换',power:'电源架',cooling:'冷却组件',cpu:'处理器',substrate:'封装基板',package:'GPU 封装',thermal:'散热组件',rectifier:'整流模块',inverter:'逆变模块',battery:'蓄电池组',bypass:'旁路',input:'电源输入',output:'交流输出',plates:'芯片冷板',supply:'二次侧供液',return:'二次侧回液',primary:'一次侧接口',cdu:'CDU 换热器',coil:'换热盘管',fan:'循环风机',cold:'送风',hot:'回风',rack:'IT 机柜'};
-function label(key) {
+const powerLabels={highSide:'高压侧端子',lowSide:'低压侧端子',windPrimary:'一次绕组',windSecondary:'二次绕组',core:'叠片铁芯',incoming:'交流进线',busbar:'中压母线',gasTank:'气体绝缘隔室',breaker:'馈线断路器',cable:'出线电缆',frontEnd:'整流模块',isolation:'隔离变换',dcBus:'直流母线',rackDc:'机架侧 DC/DC',storage:'电池支路',feeder:'直流馈线',hbm:'HBM3e 显存'};
+function label(key,state) {
+  if(state?.category==='sst'&&state.operating==='conventional'){
+    if(key==='frontEnd')return '工频变压器';
+    if(key==='isolation')return '集中整流';
+  }
+  if(state?.category==='sst'&&key==='frontEnd')return '有源整流';
+  if(powerLabels[key])return powerLabels[key];
   if(key?.startsWith('unit-'))return '计算单元 '+key.slice(5).padStart(2,'0');
   if(key?.startsWith('gpu-'))return 'GPU '+key.slice(4).padStart(2,'0');
   return labels[key];
@@ -140,7 +147,7 @@ export function createViewer(host,{onPick,onEngine}={}){
   let labelAnchor=null;
   function setSelected(key){
     selection=key;model?.select(key);
-    const part=model?.parts.get(key),name=label(key);badge.hidden=!part||!name;
+    const part=model?.parts.get(key),name=label(key,state);badge.hidden=!part||!name;
     labelAnchor=null;
     if(part&&name){const bb=new T.Box3().setFromObject(part);if(!bb.isEmpty()){labelAnchor=part.worldToLocal(bb.getCenter(vec()));badge.textContent=name;}}
     queue();

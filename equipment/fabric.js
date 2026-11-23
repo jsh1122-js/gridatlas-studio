@@ -37,7 +37,8 @@ export function mountFabric(host){
     const button=elem('button');button.type='button';button.dataset.fbMode=key;
     button.addEventListener('click',()=>switchMode(key));modes.append(button);modeButtons.set(key,button);
   }
-  const gb=()=>profile==='gb200';
+  const gb=()=>profile==='gb200'||profile==='gb300';
+  const family=()=>profile==='gb300'?'GB300':'GB200';
   const unitName=()=>gb()?'托盘':'服务器';
   const identical=()=>!outside&&source.u===target.u&&source.g===target.g;
   const different=(n,max)=>n<max?n+1:1;
@@ -87,7 +88,7 @@ export function mountFabric(host){
       const same=source.u===target.u;
       return {nodes:[src,node('fabric',same?'NVLink 互联域':'NVSwitch 互联','柜内 NVLink fabric'),dst],note:same?
         '两颗 GPU 位于同一计算托盘，同属柜内 NVLink 域。图中按逻辑域表示两端的通信关系。':
-        '两颗 GPU 分属不同计算托盘。DGX GB200 通过托盘后部的 NVLink 连接器及 NVSwitch 交换托盘实现柜内互联。'};
+        '两颗 GPU 分属不同计算托盘。DGX '+family()+' 通过托盘后部的 NVLink 连接器及 NVSwitch 交换托盘实现柜内互联。'};
     }
     if(source.u===target.u)return {nodes:[src,node('io','服务器内 I/O','PCIe 拓扑相关'),dst],
       note:'两张参考卡各含一颗 GPU。同机传输方式取决于 PCIe 拓扑、驱动及对等访问支持，可能涉及主机内存中转。'};
@@ -114,7 +115,7 @@ export function mountFabric(host){
   function refresh(){
     const enough=units>0&&per>0;empty.hidden=enough;diagram.hidden=!enough;body.hidden=!enough;footer.hidden=!enough;
     if(!active||!enough){playback();return;}
-    profileText.textContent=gb()?'DGX GB200 NVL72 · 18 托盘 × 4 GPU':'PCIe 风冷参考柜 · '+units+' 台服务器 × '+per+' 卡 · 每卡 1 GPU';
+    profileText.textContent=gb()?'DGX '+family()+' NVL72 · 18 托盘 × 4 GPU':'PCIe 风冷参考柜 · '+units+' 台服务器 × '+per+' 卡 · 每卡 1 GPU';
     const unit=unitName();
     fields.forEach((f,i)=>{const a=i?target:source;f.name.textContent=i&&outside?'对端同型柜':'本柜';options(f.unit,units,unit,a.u);options(f.gpu,per,'GPU',a.g);});
     const names={near:'同'+unit,far:'跨'+unit,outside:'跨机柜'};
@@ -127,7 +128,7 @@ export function mountFabric(host){
     active=s.category==='rack';host.hidden=!active;
     if(!active){paused=true;playback();return;}
     paused=false;
-    const next=s.profile==='gb200'?'gb200':'pcie',changed=profile!==next;profile=next;
+    const next=['gb200','gb300'].includes(s.profile)?s.profile:'pcie',changed=profile!==next;profile=next;
     units=gb()?18:count(s.servers,10);per=gb()?4:count(s.cards,4);
     const selectedUnit=limit(s.unit,units),selectedGpu=limit(s.gpu,per);
     const key=[profile,selectedUnit,selectedGpu].join('|');
@@ -136,7 +137,7 @@ export function mountFabric(host){
     source={u:limit(source.u,units),g:limit(source.g,per)};
     if(changed){outside=units*per===1;target={u:units>1?different(source.u,units):source.u,g:per>1&&units<=1?different(source.g,per):source.g};}
     target={u:limit(target.u,units),g:limit(target.g,per)};
-    profileText.textContent=gb()?'DGX GB200 NVL72':'PCIe 风冷参考柜';refresh();
+    profileText.textContent=gb()?'DGX '+family()+' NVL72':'PCIe 风冷参考柜';refresh();
   }
   host.hidden=true;
   return {update,pause(){paused=true;playback();},destroy(){disposed=true;media.removeEventListener?.('change',mediaChange);document.removeEventListener('visibilitychange',playback);scope.remove();host.hidden=true;}};

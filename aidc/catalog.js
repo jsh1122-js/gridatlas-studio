@@ -649,6 +649,8 @@
         site,
         {
           it: Number(it.toFixed(6)),
+          architecture: {ac_ups:'交流 UPS',hvdc:'集中式 HVDC',sst:'SST 800V 直流'}[scene.arch],
+          cooling: scene.cooling?.startsWith('air_')?'风冷':scene.cooling?.startsWith('liquid_')?'冷板液冷':undefined,
           load: scenarioAssumptions.load,
           tariff: scenarioAssumptions.tariff,
           pue: scenarioAssumptions.pue,

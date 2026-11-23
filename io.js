@@ -67,6 +67,13 @@
       throw new Error('方案文件的保存时间无效。');
     }
     const config = cleanConfig(raw.config);
+    const rackMix=raw.rackMix==null?[]:window.GridRackMix.clean(raw.rackMix);
+    if(rackMix.length){
+      const summary=window.GridRackMix.summarize(rackMix);
+      const agrees=(a,b)=>Math.abs(a-b)<=4*Number.EPSILON*Math.max(Math.abs(a),Math.abs(b));
+      if(!agrees(summary.itMW,config.it)||!agrees(summary.density,config.density))throw new Error('机柜组合与文件中的设计功率或单柜功率不一致。');
+      config.it=summary.itMW;config.density=summary.density;
+    }
     return {
       id: cleanText(raw.id, '方案编号', 180),
       name: cleanText(raw.name, '方案名称', 160),
@@ -76,6 +83,8 @@
         label: cleanText(raw.location.label ?? '', '场址名称', 200, true)
       },
       config,
+      ...(rackMix.length ? {rackMix} : {}),
+      ...(raw.spacePlan == null ? {} : {spacePlan:window.GridSpacePlan.clean(raw.spacePlan)}),
       ...(raw.rackStudy == null ? {} : {rackStudy:window.GridRackStudy.clean(raw.rackStudy)}),
       ...(raw.aidc == null ? {} : {aidc:cleanAidc(raw.aidc)}),
       updatedAt: updatedAt.toISOString()
@@ -149,6 +158,15 @@
       ['综合到户电价', `${number(c.tariff, 4)} 元/kWh`, '绿电目标占比', `${number(c.green, 3)}%`],
       ['供电架构', c.architecture, '制冷方式', c.cooling]
     ];
+    try {
+      const layout=window.GridSpacePlan.calculate(c,data.rackStudy,data.spacePlan);
+      parameters.push(['机房配置',number(layout.halls,0)+' 间','机房净面积合计',number(layout.whiteSpaceM2,1)+' m²'],
+        ['建筑面积估算',number(layout.grossM2,1)+' m²','代表机房长 × 宽',number(layout.hallLengthM,1)+' × '+number(layout.hallWidthM,1)+' m']);
+      if(data.rackMix){
+        const summary=data.rackMix.map(row=>(row.profile==='pcie'?'PCIe':row.profile.toUpperCase())+' × '+number(row.count,0)+' 柜').join('、');
+        parameters.push(['机柜搭配',summary,'面积口径','机房净面积按每柜 '+number(layout.assumptions.whiteSpaceM2PerRack,2)+' m² 折算']);
+      }
+    } catch {parameters.push(['空间规划','数值超出面积测算范围','机房布局','待核对']);}
     return `<header class="ga-r-head"><strong>算电图研 <span>GridAtlas</span></strong><span>方案测算简报</span></header>
       <h1>${escape(data.name)}</h1>
       <p class="ga-r-meta">场址　${escape(l.label || '自选场址')}　 ·　${coord(l.lat, 'N', 'S')}，${coord(l.lon, 'E', 'W')}（WGS84）</p>

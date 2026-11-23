@@ -9,12 +9,13 @@
     if (className) node.className = className;
     return node;
   };
-  function mount({onLoad,onInspect}) {
+  function mount({onLoad,onInspect,onPlan,onMix}) {
     let project, metrics, campus, territory, locationKey, request, nearData;
     let playing = !matchMedia('(prefers-reduced-motion: reduce)').matches;
     let mode = 'campus', selected = null, station = null, active = false;
     const modeButtons = [...document.querySelectorAll('[data-twin-mode]')];
     const objectButtons = [...document.querySelectorAll('[data-object]')];
+    const planner=GridTwinPlan.mount({onApply:onPlan,onMix,onInspect,onCircuit:key=>campus?.setCircuit?.(key)});
     const renderDetails = () => {
       const config = project.config;
       const showingStation = mode === 'territory' && station;
@@ -75,13 +76,15 @@
       } else {
         territory?.destroy();
         territory = null;
-        if (!campus) campus = GridCampus.mount($('campus'), {onSelect: selectCampus,onInspect});
+        if (!campus) campus = GridCampus.mount($('campus'), {onSelect:selectCampus,onInspect,onOpenHall:()=>{selectCampus('it');changeMode('cutaway');}});
         campus.update({project, metrics});
         campus.setPlaying?.(playing);
         campus.setMode(mode);
+        campus.setCircuit?.(planner.getCircuit());
         campus.setSelected(selected);
       }
       $('scene-source').textContent = {campus:'园区建筑与设备布局为方案示意', cutaway:'机柜为代表性示意，规划数量按方案折算', territory:'设施位置来自 OSM，距离按场址至站点代表点计算'}[mode];
+      planner.renderRoutes(mode);
       renderDetails();
     }
     function changeMode(nextMode) {
@@ -193,6 +196,8 @@
         const projectChanged = project?.id !== nextProject.id;
         project = nextProject;
         metrics = GridDesign.calculate(project.config);
+        try {metrics.layout=GridSpacePlan.calculate(project.config,project.rackStudy,project.spacePlan);} catch {metrics.layout=null;}
+        planner.update(project,metrics.layout,mode);
         if (projectChanged) { selected = null; station = null; }
         const {it, load, pue} = project.config;
         const itAverage = it * load / 100;

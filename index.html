@@ -5,17 +5,26 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#0b1521">
   <meta name="description" content="在基础设施地图上选择候选场址，建立和比较智算中心的供电、能耗与成本方案。">
-  <title>算电图研 GridAtlas · 算电选址工作台</title>
+  <title>算电图研 · 数据中心数字孪生</title>
+  <meta property="og:title" content="算电图研 · 数据中心数字孪生">
+  <meta property="og:description" content="点开机房探索机柜、供配电和冷却回路，按 IT 规模与机柜组合规划机房。">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://jsh1122-js.github.io/gridatlas-studio/">
+  <meta property="og:image" content="https://jsh1122-js.github.io/gridatlas-studio/preview.webp">
   <link rel="icon" href="brand.svg" type="image/svg+xml">
   <link rel="stylesheet" href="app.css">
   <link rel="stylesheet" href="map.css">
   <link rel="stylesheet" href="station-view.css">
   <link rel="stylesheet" href="design.css">
   <link rel="stylesheet" href="twin.css">
+  <link rel="stylesheet" href="twin-plan.css">
   <link rel="stylesheet" href="studio.css"><link rel="stylesheet" href="equipment/equipment.css"><link rel="stylesheet" href="equipment/fabric.css">
   <script defer src="map-data.js"></script>
   <script defer src="map.js"></script>
   <script defer src="design.js"></script>
+  <script defer src="space-plan.js"></script>
+  <script defer src="rack-mix.js"></script>
+  <script defer src="twin-plan.js"></script>
   <script defer src="aidc/finance.js"></script>
   <script defer src="equipment/study.js"></script>
   <script defer src="io.js"></script>
@@ -42,7 +51,7 @@
     <section id="twin" class="page twin-page" aria-labelledby="tw-title" hidden>
       <div class="tw-heading">
         <div><h1 id="tw-title">算电数字孪生</h1><p class="tw-project-line"><i data-i="pin"></i><span id="tw-place"></span><span class="tw-separator">/</span><span id="tw-name"></span></p></div>
-        <div class="tw-heading-actions"><a href="#equipment"><i data-i="layers"></i>设备剖解</a><a href="#overview"><i data-i="map"></i>选址测算</a><a class="tw-accent-btn" href="#design"><i data-i="sliders"></i>调整方案</a></div>
+        <div class="tw-heading-actions"><button id="tw-share" type="button"><i data-i="export"></i>分享网址</button><a href="#equipment"><i data-i="layers"></i>设备剖解</a><a href="#overview"><i data-i="map"></i>选址测算</a><button type="button" class="tw-accent-btn" id="tp-jump"><i data-i="sliders"></i>配置机房</button></div>
       </div>
       <div class="tw-primary">
         <section class="tw-card tw-visual" aria-label="三维场景">
@@ -64,6 +73,7 @@
               <button type="button" data-camera="home" aria-label="复位场景视角" title="复位视角"><i data-i="focus"></i></button>
             </div>
           </div>
+          <div class="tp-routes" id="tp-routes" hidden><div class="tp-trace-head"><span>追踪回路</span><div class="tp-switches" aria-label="选择回路"></div></div><div id="tp-chain" aria-label="沿回路查看设备"></div></div>
           <div class="tw-stage-foot"><span id="tw-scene-source">园区建筑与设备布局为方案示意</span><span class="tw-drag-hint"><i data-i="orbit"></i>拖动旋转 · 滚轮缩放</span></div>
         </section>
         <aside class="tw-card tw-inspector" aria-labelledby="tw-load-title">
@@ -80,6 +90,24 @@
           <a href="#energy" class="tw-electricity-link"><i data-i="clock"></i>查看分时电价模拟</a>
         </aside>
       </div>
+      <section class="tw-card tp-planner" id="tp-planner" aria-labelledby="tp-title">
+        <div class="tp-head"><div class="tw-section-title"><i data-i="layers"></i><h2 id="tp-title">机房规模与设备方案</h2></div><button id="tp-toggle" type="button" aria-expanded="false" aria-controls="tp-form">调整参数</button></div>
+        <div class="tp-sizing" aria-live="polite"><div><span>规划机房</span><b id="tp-halls">—</b></div><div><span>机房净面积合计</span><b id="tp-net">—</b></div><div><span>估算总建筑面积</span><b id="tp-gross">—</b></div><div><span>代表机房长 × 宽</span><b id="tp-dim">—</b></div></div>
+        <p class="tp-brief" id="tp-summary"></p>
+        <form id="tp-form" hidden><div class="tp-inputs">
+          <label>设计 IT 功率（MW）<input name="it" type="number" step="any" required min="0.000001"></label>
+          <label>规划单柜功率（kW）<input name="density" type="number" step="any" required min="0.000001"></label>
+          <label>机柜参考型号<select name="profile"><option value="gb200">GB200 NVL72</option><option value="gb300">GB300 NVL72</option><option value="pcie">可配置 PCIe 风冷柜</option></select></label>
+          <label>供电架构<select name="architecture"></select></label>
+          <label>制冷方案<select name="cooling"></select></label>
+          <label>每间机房机柜上限（柜）<input name="maxRacksPerHall" type="number" step="1" min="1" required></label>
+          <label>单柜机房净面积（m²/柜）<input name="whiteSpaceM2PerRack" type="number" step="any" min="0.000001" required></label>
+          <label>机房净面积占建筑面积（%）<input name="whiteSpacePct" type="number" step="any" min="0.000001" max="100" required></label></div>
+          <div class="tp-submit"><button type="submit">应用到园区</button><button id="tp-reference" type="button" hidden>套用样机功率和冷却方式</button><span id="tp-feedback" role="status"></span></div>
+          <p class="tp-brief">净面积含机柜与机房内通道。建筑面积按净面积占比折算，室外场地另计。机房按 1.6∶1 等面积矩形示意。</p>
+        </form>
+        <div id="tp-mix"></div>
+      </section>
       <section class="tw-summary" aria-label="项目测算指标">
         <div><span><i data-i="bolt"></i>IT 设计功率</span><p><b id="tw-it">—</b><small>MW</small></p></div>
         <div><span><i data-i="server"></i>规划机柜数</span><p><b id="tw-racks">—</b><small>柜</small></p></div>
@@ -95,7 +123,7 @@
     </section>
     <section id="equipment" class="page eq-page" hidden aria-labelledby="eq-title">
       <div class="tw-heading"><div><h1 id="eq-title">设备剖解</h1><p class="tw-project-line"><i data-i="cube"></i><span id="eq-project"></span><span class="tw-separator">/</span>参考设备结构</p></div><div class="tw-heading-actions"><a href="#twin"><i data-i="orbit"></i>返回园区</a><a href="#aidc"><i data-i="server"></i>方案设备清单</a></div></div>
-      <div class="eq-categories" aria-label="设备系统"><button type="button" data-eq-category="rack"><i data-i="server"></i>算力机柜</button><button type="button" data-eq-category="ups"><i data-i="bolt"></i>UPS 供电</button><button type="button" data-eq-category="liquid"><i data-i="drop"></i>冷板液冷</button><button type="button" data-eq-category="air"><i data-i="fan"></i>机房风冷</button></div>
+      <div class="eq-categories" aria-label="设备系统"><button type="button" data-eq-category="rack"><i data-i="server"></i>算力机柜</button><button type="button" data-eq-category="switchgear"><i data-i="network"></i>GIS 开关柜</button><button type="button" data-eq-category="transformer"><i data-i="bolt"></i>配电变压器</button><button type="button" data-eq-category="sst"><i data-i="network"></i>SST / 800V</button><button type="button" data-eq-category="hvdc"><i data-i="bolt"></i>集中式 HVDC</button><button type="button" data-eq-category="ups"><i data-i="bolt"></i>UPS 供电</button><button type="button" data-eq-category="liquid"><i data-i="drop"></i>冷板液冷</button><button type="button" data-eq-category="air"><i data-i="fan"></i>机房风冷</button></div>
       <div class="eq-layout">
         <section class="tw-card eq-workbench" aria-label="设备模型"><div class="tw-visual-head"><div class="eq-crumbs" id="eq-crumbs"></div><button id="eq-expand" type="button" aria-label="全屏查看设备"><i data-i="expand"></i></button></div>
           <div class="eq-stage" id="eq-stage"><div id="eq-canvas"></div><div class="eq-stage-read"><b id="eq-model-label"></b><span id="eq-stage-caption"></span></div><div class="eq-tools">
@@ -103,7 +131,7 @@
           <div class="eq-under"><label for="eq-explode">拆解程度</label><input id="eq-explode" min="0" max="100" value="0" type="range"><output for="eq-explode" id="eq-explode-value">0%</output><span id="eq-engine"></span></div>
         </section>
         <aside class="tw-card eq-inspector"><div class="tw-section-title"><i data-i="layers"></i><h2>设备检查</h2></div>
-          <label id="eq-profile-label" class="eq-form">机柜样机<select id="eq-profile"><option value="gb200">GB200 NVL72 液冷参考柜</option><option value="pcie">可配置 PCIe 风冷参考柜</option></select></label>
+          <label id="eq-profile-label" class="eq-form">机柜样机<select id="eq-profile"><option value="gb200">GB200 NVL72 液冷参考柜</option><option value="gb300">GB300 NVL72 液冷参考柜</option><option value="pcie">可配置 PCIe 风冷参考柜</option></select></label>
           <div id="eq-custom" class="eq-pair" hidden><label class="eq-form">每柜服务器<select id="eq-servers"></select></label><label class="eq-form">每台加速卡<select id="eq-cards"></select></label></div>
           <div class="eq-mode" id="eq-modes"></div><h3 id="eq-detail-title"></h3><p id="eq-description"></p>
           <div class="eq-picker" id="eq-objects" aria-label="选择模型部件"></div>

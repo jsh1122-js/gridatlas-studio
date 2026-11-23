@@ -1,0 +1,26 @@
+.tp-planner{padding:16px 19px;margin:15px 0}
+.tp-head,.tp-trace-head,.tp-submit,.tp-switches,.tp-path,.tw-heading-actions button{display:flex;align-items:center;gap:8px}
+.tp-head,.tp-trace-head{justify-content:space-between}
+.tp-head button,.tp-submit button,.tp-switches button,.tp-path button,.tw-heading-actions button{font:inherit;color:#c6dbe7;border:1px solid #365163;background:#172d3c;border-radius:6px;padding:6px 10px;font-size:.79rem}
+.tp-head button:hover,.tp-submit button:hover,.tp-path button:hover{background:#264656}
+.tw-heading-actions button.tw-accent-btn,.tp-submit button[type=submit]{background:#8ce8ce;border-color:#8ce8ce;color:#102e2e;font-weight:650}
+.tw-heading-actions button{font-weight:600;padding:9px 14px}
+.tp-sizing{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin-top:12px}
+.tp-sizing>div{border-left:2px solid #365c63;padding-left:9px;display:grid;gap:4px}
+.tp-sizing span,.tp-brief,.tp-inputs label,.tp-submit span{font-size:.76rem;color:#b6c9d8}
+.tp-sizing b{color:#eaf7f4;font-weight:650;font-size:1.05rem}
+.tp-brief{margin:10px 0 0;line-height:1.55}
+.tp-inputs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:15px 0 9px;border-top:1px solid #2e4354;margin-top:13px}
+.tp-inputs label{display:flex;flex-direction:column;gap:5px}
+.tp-inputs input,.tp-inputs select{width:100%;min-width:0;border:1px solid #3e5366;border-radius:6px;background:#0e1d2b;color:#e5f2f8;padding:7px 9px;font:inherit}
+.tp-submit,.tp-path,.tp-switches{flex-wrap:wrap}
+.tp-routes{padding:9px 15px;background:#101e2d;border-top:1px solid #294353}
+.tp-trace-head{justify-content:flex-start;font-size:.78rem;color:#afc6d5}
+.tp-switches button,.tp-path button{padding:4px 8px;font-size:.74rem}
+.tp-switches button[aria-pressed=true]{background:#20423f;color:#a5efd8;border-color:#3a6b5e}
+.tp-path{margin-top:7px;gap:5px}
+.tp-path>span{color:#74cab7}
+.tp-path button{background:transparent;border-color:#344a59;color:#cfdee8}
+@media(max-width:720px){.tp-inputs,.tp-sizing{grid-template-columns:repeat(2,minmax(0,1fr))}.tp-planner{padding:12px;margin:10px 0}.tp-sizing b{font-size:.95rem}.tp-inputs{gap:8px}.tp-routes{padding:8px}.tw-heading-actions button{font-size:.73rem;padding:6px 9px}}
+#tp-mix{margin-top:12px}
+#tp-mix:empty{display:none}
