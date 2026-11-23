@@ -5,7 +5,7 @@
   const systems = ['交流 UPS','800V 直流','SST 800V 直流','集中式 HVDC'];
   const cooling = ['混合冷却','风冷','冷板液冷'];
   const names = {rack:'机柜',ups:'UPS',switchgear:'中压 GIS 开关柜',transformer:'配电变压器',sst:'SST 隔离变换','800v':'集中整流 / 800V 母线',hvdc:'HVDC 集中整流',liquid:'CDU 与冷板',air:'空调与风道'};
-  const circuits = {all:'综合',power:'供电',liquid:'液冷',air:'风冷'};
+  const circuits = {all:'综合',power:'供电',liquid:'液冷',air:'风冷',data:'数据'};
   const lines = {
     '交流 UPS':['switchgear','transformer','ups','rack'],
     '800V 直流':['switchgear','transformer','800v','rack'],
@@ -83,7 +83,7 @@
       $('routes').hidden=!cut;
       if(!cut)return;
       const config=project.config;
-      const available=['all','power',...(config.cooling==='风冷'?[]:['liquid']),...(config.cooling==='冷板液冷'?[]:['air'])];
+      const available=['all','power','data',...(config.cooling==='风冷'?[]:['liquid']),...(config.cooling==='冷板液冷'?[]:['air'])];
       if(!available.includes(chosen)){chosen='all';onCircuit(chosen);}
       const switches=$('routes').querySelector('.tp-switches');
       switches.replaceChildren(...available.map(key=>{
@@ -92,11 +92,14 @@
       }));
       const host=$('chain');host.replaceChildren();
       if(chosen==='power'||chosen==='all'){
-        const seq=(lines[config.architecture]||lines['交流 UPS']).map(k=>[k==='rack'?(config.architecture.includes('800V')?'机架变换 / IT 机柜':'机柜配电 / IT 负载'):names[k],k]);
+        const ac=config.architecture==='交流 UPS';
+        const seq=(lines[config.architecture]||lines['交流 UPS']).slice(0,-1).map(k=>[names[k],k]);
+        seq.push([ac?'列头柜':'列级直流配电','rowdist'],[ac?'机柜 PDU':'柜内直流分配','pdu'],[ac?'PSU 电源模块':'机架 DC/DC','psu'],['IT 负载','rack']);
         host.append(pathNodes(seq));
       }
-      if(chosen==='liquid')host.append(pathNodes([['一次侧换热','liquid'],['CDU 供液','liquid'],['机柜歧管 / 芯片冷板','liquid'],['回液至 CDU','liquid']]));
-      if(chosen==='air')host.append(pathNodes([['机房空调','air'],['冷通道','air'],['服务器风道','rack'],['热通道 / 回风','air']]));
+      if(chosen==='liquid')host.append(pathNodes([['一次侧换热','liquid/primary'],['CDU 供液','liquid/supply'],['芯片冷板','liquid/plates'],['回液至 CDU','liquid/return']]));
+      if(chosen==='air')host.append(pathNodes([['机房空调','air'],['冷通道','air/cold'],['服务器风扇','fan'],['热通道与回风','air/hot']]));
+      if(chosen==='data')host.append(pathNodes([['服务器网口','network/nic'],['线缆与配线','network'],['机架交换机','network/tor']]));
     }
     function update(p,layout,mode){
       const changedProject=project?.id!==p.id;project=p;

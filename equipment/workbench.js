@@ -1,11 +1,12 @@
 import {createViewer} from './viewer.js';
+import {serviceExhibit,serviceModes,serviceNames} from './rack-services.js';
 import {mountFabric} from './fabric.js';
 import {powerCategoryNames,powerSettings,powerDestination,powerExhibit} from './power-equipment.js';
 
 const $ = id => document.getElementById('eq-'+id);
 const create = (tag,text) => {const node=document.createElement(tag);node.textContent=text;return node;};
 const digit = n => String(n).padStart(2,'0');
-const categories = {rack:'算力机柜',ups:'UPS 供电',liquid:'冷板液冷',air:'机房风冷',...powerCategoryNames};
+const categories = {rack:'算力机柜',ups:'UPS 供电',liquid:'冷板液冷',air:'机房风冷',...powerCategoryNames,...serviceNames};
 const modes = {mains:'市电双变换',battery:'电池供电',bypass:'静态旁路'};
 const isNVL = profile => profile==='gb200'||profile==='gb300';
 const chipDoc = 'https://developer.nvidia.com/blog/inside-nvidia-blackwell-ultra-the-chip-powering-the-ai-factory-era/';
@@ -47,6 +48,12 @@ function rackParts(s,n) {
   if(s.level==='rack')return {
     frame:[gb?s.profile.toUpperCase()+' NVL72 整柜':'42U PCIe 参考柜',gb?'18 个计算托盘通过柜内 NVLink 交换系统互联。选择托盘可继续查看其中的 CPU、GPU 和冷却组件。':'此参考柜按每台 4U、每张 PCIe 加速卡含 1 颗 GPU 建模。服务器数量、卡数均可调整。'],
     ['unit-'+s.unit]:[unit+' '+digit(s.unit),gb?'本托盘含两颗 Grace CPU 和四颗 '+chip+' GPU，可打开板级视图查看。':'本台服务器安装 '+n.perNode+' 张单 GPU PCIe 加速卡，可打开服务器逐卡查看。'],
+    door:['通风网门','开启的网门展示镂空通风面和框架。实际机柜可按通风与装配条件采用不同门体。'],
+    manager:['线缆管理通道','跳线沿机柜竖向理线器整理，并与供电和冷却管线分区。'],
+    psu:[gb?'电源架模块':'服务器 PSU','打开电源模块，查看可抽结构、输入接口、功率级及背板。'],
+    pdu:[gb?'柜内配电母排':'机柜侧配电','打开机柜配电单元，对照当前架构查看导体与取电接口。'],
+    fan:['风扇组件','打开风扇阵列，查看叶轮、轮毂、网罩及气流方向。'],
+    network:[gb?'管理交换与布线':'ToR 与布线','打开网络设备，查看交换机、收发模块、跳线及服务器端口。'],
     fabric:[gb?'NVLink 交换托盘':'网络互联',gb?'9 个 NVLink 交换托盘把柜内 GPU 接入同一个 NVLink 域。跨柜通信另经计算节点网卡连接集群网络。':'柜内各服务器通过网卡接入机架交换机，再连接集群网络。具体链路速率和拓扑取决于网络选型。'],
     power:['机柜配电',gb?'电源架把交流输入转换为直流，经机柜母排配送给计算和交换托盘。':'机架配电向服务器电源单元供电；电源额定值和冗余方式需随实际配置确定。'],
     cooling:[gb?'冷却歧管':'风冷散热',gb?'柜内歧管为计算托盘的 CPU 和 GPU 冷板供回液；网络和存储等其余部分仍有风冷。':'服务器以进风、散热器和排风形成气流，机房冷热通道连接机柜与空调。']
@@ -75,6 +82,7 @@ function devices() {
   return catalogPromise;
 }
 function exhibit(s,project) {
+  if(Object.hasOwn(serviceNames,s.category))return serviceExhibit(s,project);
   if(Object.hasOwn(powerSettings,s.category))return powerExhibit(s,project);
   const n=GridRackStudy.count(s),gb=isNVL(s.profile),ultra=s.profile==='gb300',unit=gb?'计算托盘':'服务器';
   if(s.category==='rack'){
@@ -122,9 +130,9 @@ function toggleButton(label,pressed,action) {
   const button=create('button',label);button.type='button';button.setAttribute('aria-pressed',String(pressed));
   button.addEventListener('click',action);return button;
 }
-export function mount({onChange}={}) {
+export function mount({onChange,onPartChanged}={}) {
   const workbench=$('stage').closest('.eq-workbench'), reduce=window.matchMedia('(prefers-reduced-motion: reduce)');
-  const state={...GridRackStudy.defaults,category:'rack',level:'rack',unit:1,gpu:1,condition:'mains',operating:'loaded'};
+  const state={...GridRackStudy.defaults,category:'rack',level:'rack',unit:1,gpu:1,condition:'mains',operating:null};
   let project,active=false,previewProfile=false,part='frame',split=0,playing=!reduce.matches,orbit=false,data,revision=0;
   const fabric=mountFabric($('fabric'));
   const viewer=createViewer($('canvas'),{onPick:key=>choosePart(key,true),onEngine:label=>{$('engine').textContent=label;}});
@@ -158,14 +166,19 @@ export function mount({onChange}={}) {
       }
     }
     if(!Object.hasOwn(data.parts,key))return;
-    part=key;paintDetail();
+    part=key;
+    if(drill&&rack()&&state.level==='rack'&&Object.hasOwn(serviceNames,key)){focusTarget(key);return;}
+    paintDetail(true);
   }
-  function paintDetail(){
+  function paintDetail(focus=false){
     if(!Object.hasOwn(data.parts,part))part=Object.keys(data.parts)[0];
     $('detail-title').textContent=data.parts[part][0];$('description').textContent=data.parts[part][1];
     for(const button of $('objects').children)button.setAttribute('aria-pressed',String(button.dataset.part===part));
     if(rack()&&state.level==='tray')$('unit').value=String(state.gpu);
-    viewer.select(part);
+    const title=data.parts[part][0];viewer.select(part,title,{focus});
+    const detail={...state,part,title,cooling:project.config.cooling,load:project.config.load};
+    onPartChanged?.(detail);
+    document.getElementById('equipment').dispatchEvent(new CustomEvent('gridatlas-equipment-selection',{detail,bubbles:true}));
   }
   function crumbs(){
     const box=$('crumbs');box.replaceChildren();
@@ -195,18 +208,19 @@ export function mount({onChange}={}) {
     if(!active)return;
     const focused=document.activeElement;
     const restoreFocus=['modes','objects','crumbs'].find(id=>$(id).contains(focused));
+    state.architecture=project.config.architecture;
     data=exhibit(state,project);
     for(const b of document.querySelectorAll('[data-eq-category]'))b.setAttribute('aria-pressed',String(b.dataset.eqCategory===state.category));
     $('profile-label').hidden=!rack();$('custom').hidden=!rack()||state.profile!=='pcie';
     previewNote.hidden=!previewProfile;$('profile').value=state.profile;$('servers').value=String(state.servers);$('cards').value=String(state.cards);
-    const modeBox=$('modes'),isUps=state.category==='ups',settings=isUps?modes:powerSettings[state.category];
+    const modeBox=$('modes'),isUps=state.category==='ups',settings=isUps?modes:(powerSettings[state.category]||serviceModes[state.category]);
     modeBox.hidden=!settings;
     modeBox.replaceChildren(...Object.entries(settings||{}).map(([key,label])=>{
       const field=isUps?'condition':'operating';
       return toggleButton(label,key===state[field],()=>{
         if(key===state[field])return;
         state[field]=key;
-        part=isUps?(key==='mains'?'rectifier':key):({transformer:'lowSide',switchgear:'breaker',sst:'frontEnd',hvdc:key==='stored'?'storage':'frontEnd'})[state.category];
+        part=isUps?(key==='mains'?'rectifier':key):({transformer:'lowSide',switchgear:'breaker',sst:'frontEnd',hvdc:key==='stored'?'storage':'frontEnd',network:'tor'})[state.category];
         draw();
       });
     }));
@@ -230,16 +244,16 @@ export function mount({onChange}={}) {
     }));
     links.replaceChildren();
     if(history.length){
-      const prev=history.at(-1),back=create('button','返回'+categories[prev.category]);back.type='button';
-      back.onclick=()=>{Object.assign(state,history.pop());part='frame';draw();};links.append(back);
+      const prev=history.at(-1),back=create('button','返回'+categories[prev.state.category]);back.type='button';
+      back.onclick=()=>restoreView(history.pop());links.append(back);
     }
     for(const [key,title] of data.related||[]){
       const b=create('button',title+' ›');b.type='button';
-      b.onclick=()=>{history.push({category:state.category,operating:state.operating,level:state.level});navigate(key);};links.append(b);
+      b.onclick=()=>focusTarget(key);links.append(b);
     }
     links.hidden=!links.childElementCount;
     crumbs();drillControls();
-    viewer.show({...state});fabric.update({...state});viewer.setExplode(split/100);viewer.setLoad(project.config.load/100);
+    viewer.show({...state});viewer.setLabels?.(Object.fromEntries(Object.entries(data.parts).map(([key,detail])=>[key,detail[0]])));fabric.update({...state});viewer.setExplode(split/100);viewer.setLoad(project.config.load/100);
     paintDetail();motion();
     if(restoreFocus){
       const focusTarget=$(restoreFocus).querySelector('[aria-pressed="true"],button')||$('detail-title');
@@ -277,11 +291,40 @@ export function mount({onChange}={}) {
       if(token===revision)write('方案已保存 AIDC 设备清单，暂时无法载入型号库核对总数。参考柜仍可独立查看。');
     }
   }
+  function captureView(){
+    if(!project)return null;
+    return {projectId:project.id,state:{...state},part,split,previewProfile,playing,orbit,camera:viewer.captureView?.()};
+  }
+  function restoreView(view){
+    if(!active||!view||view.projectId!==project.id||!Object.hasOwn(categories,view.state?.category))return false;
+    Object.assign(state,view.state);part=view.part;split=Math.min(100,Math.max(0,Number(view.split)||0));
+    previewProfile=Boolean(view.previewProfile);playing=Boolean(view.playing);orbit=Boolean(view.orbit);
+    $('explode').value=String(split);$('explode-value').textContent=split+'%';draw();
+    if(view.camera)viewer.restoreView?.(view.camera);return true;
+  }
+  function focusTarget(target){
+    if(!active||typeof target!=='string')return false;
+    const [raw,sub,extra]=target.split('/');
+    if(extra!==undefined)return false;
+    const profile=/^rack:(gb200|gb300|pcie)$/.exec(raw);
+    const dest=profile?'rack':raw==='power'?powerDestination(project.config.architecture):raw==='cooling'?(project.config.cooling==='风冷'?'air':'liquid'):raw;
+    const cat=dest==='800v'?'sst':dest;
+    if(!Object.hasOwn(categories,cat))return false;
+    const view=captureView();
+    if(cat===state.category&&!profile&&sub&&Object.hasOwn(data.parts,sub)){part=sub;paintDetail(true);return true;}
+    if(cat===state.category&&!sub&&!profile&&dest!=='800v')return true;
+    history.push(view);if(history.length>32)history.shift();
+    if(profile){state.profile=profile[1];previewProfile=state.profile!==GridRackStudy.clean(project.rackStudy).profile;state.unit=1;state.gpu=1;}
+    navigate(dest);
+    if(sub){if(!Object.hasOwn(data.parts,sub)){restoreView(history.pop());return false;}part=sub;paintDetail(true);}
+    return true;
+  }
   function navigate(key){
     const category=key==='800v'?'sst':key;
     if(!Object.hasOwn(categories,category))return;
     state.category=category;state.level='rack';part='frame';
-    if(powerSettings[category])state.operating=key==='800v'?'conventional':Object.keys(powerSettings[category])[0];
+    const choices=powerSettings[category]||serviceModes[category];
+    state.operating=choices?(key==='800v'?'conventional':Object.keys(choices)[0]):null;
     draw();
   }
   function motion(){
@@ -332,15 +375,20 @@ export function mount({onChange}={}) {
       const different=!project||project.id!==next.id;project=next;
       Object.assign(state,GridRackStudy.clean(project.rackStudy));active=true;
       $('project').textContent=project.name;
-      if(different){history.length=0;state.unit=1;state.gpu=1;state.condition='mains';state.level='rack';state.category='rack';part='frame';}
+      if(different){history.length=0;state.unit=1;state.gpu=1;state.condition='mains';state.operating=null;state.level='rack';state.category='rack';part='frame';}
       const n=numberState();state.unit=Math.min(state.unit,n.nodes);state.gpu=Math.min(state.gpu,n.perNode);
-      const override=typeof target==='string'&&/^rack:(gb200|gb300|pcie)$/.exec(target);
+      const [direct,sub]=typeof target==='string'?target.split('/'):[];
+      const override=direct&&/^rack:(gb200|gb300|pcie)$/.exec(direct);
       previewProfile=Boolean(override&&override[1]!==state.profile);
       if(override){state.profile=override[1];state.unit=1;state.gpu=1;}
-      const dest=override?'rack':target==='cooling'?(project.config.cooling==='风冷'?'air':'liquid'):target==='power'?powerDestination(project.config.architecture):target==='it'?'rack':target;
-      if(dest&&(dest==='800v'||Object.hasOwn(categories,dest))){history.length=0;navigate(dest);}else draw();
+      const dest=override?'rack':direct==='cooling'?(project.config.cooling==='风冷'?'air':'liquid'):direct==='power'?powerDestination(project.config.architecture):direct==='it'?'rack':direct;
+      if(dest&&(dest==='800v'||Object.hasOwn(categories,dest))){
+        history.length=0;navigate(dest);
+        if(sub&&Object.hasOwn(data.parts,sub)){part=sub;paintDetail(true);}
+      }else draw();
       showBom(project.aidc?.items);
     },
+    focusTarget,captureView,restoreView,
     pause(){active=false;fabric.pause();motion();closeExpanded();}
   };
 }

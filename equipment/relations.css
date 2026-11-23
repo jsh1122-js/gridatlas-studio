@@ -1,0 +1,23 @@
+.grl-panel{color:#e8f1f6;background:#112131;border:1px solid #304554;border-radius:12px;padding:15px 17px;min-width:0;font-family:inherit}
+.grl-head,.grl-controls,.grl-tabs,.grl-legend,.grl-legend span,.grl-foot{display:flex;align-items:center}
+.grl-head{justify-content:space-between;gap:10px;flex-wrap:wrap}.grl-head h2{font-size:1.03rem;line-height:1.45;font-weight:670;letter-spacing:-.025em;margin:0}
+.grl-controls{gap:7px;flex-wrap:wrap}.grl-tabs{padding:2px;gap:2px;background:#0a1824;border:1px solid #2b4151;border-radius:7px}
+.grl-panel button,.grl-panel a{font-family:inherit;cursor:pointer}.grl-tabs button,.grl-play{background:transparent;color:#adc4d1;border:1px solid transparent;border-radius:4px;padding:4px 9px;min-height:29px;font-size:.78rem;font-weight:560;line-height:1.25}
+.grl-tabs button:hover,.grl-play:hover{color:#d7eee9;background:#1c3441}.grl-tabs [aria-pressed=true]{color:#a0efd4;background:#20413f;border-color:#385a55}
+.grl-play{border-color:#395061;background:#182b3a;white-space:nowrap}.grl-play:disabled{cursor:default;color:#aec0cd;background:#142635}
+.grl-sub{color:#a8c0ce;font-family:inherit;font-size:.76rem;line-height:1.6;font-weight:550;margin:8px 0 6px}
+.grl-board{min-width:0;position:relative;border-radius:8px;overflow:hidden;background:radial-gradient(ellipse at 50% 32%,#1d3742,transparent 75%),#0d1c2a;box-shadow:inset 0 0 0 1px #2b4453}
+.grl-board::before{content:'';position:absolute;inset:0;pointer-events:none;background-image:radial-gradient(#a2c6c620 .85px,transparent .85px);background-size:14px 14px}
+.grl-board>svg,.grl-nodes{position:absolute;inset:0;width:100%;height:100%}.grl-board>svg{pointer-events:none}
+.grl-node{position:absolute;transform:translate(-50%,-50%);background:linear-gradient(135deg,#203847,#182b3a);border:1px solid #426070;border-radius:7px;color:#dce9f1;box-sizing:border-box;font-size:clamp(.74rem,1.08vw,.86rem);font-weight:590;line-height:1.3;padding:3px 6px;text-align:center;box-shadow:0 3px 6px #06111d55;transition:background-color .14s,border-color .14s}
+.grl-node:hover{border-color:#77a59d;color:#effff4}.grl-node[aria-pressed=true]{background:linear-gradient(120deg,#244e4e,#203e43);border:1.5px solid #7de2c4;color:#c4fae8;box-shadow:0 0 0 3px #72dcbe15,0 4px 8px #07151c55}
+.grl-panel :is(button,a):focus-visible{outline:2px solid #a2efdb;outline-offset:2px}
+.grl-flow{stroke-dasharray:3 18;opacity:.85}.grl-signal{stroke-dasharray:1 7;opacity:.78}
+.grl-panel[data-moving=true] .grl-flow{animation:grl-flow 1.15s linear infinite}.grl-panel[data-moving=true] .grl-signal{animation:grl-signal 1.8s ease-in-out infinite alternate}
+@keyframes grl-flow{to{stroke-dashoffset:-21}}@keyframes grl-signal{from{opacity:.15}to{opacity:1}}
+.grl-legend{flex-wrap:wrap;gap:5px 13px;color:#a4bac8;margin:7px 0 9px;font-size:.71rem}.grl-legend span{gap:5px}.grl-legend i{display:block;width:15px;height:0;border-top:2px solid var(--rel-color)}.grl-legend i.grl-dash{border-top-style:dashed}
+.grl-detail{border-top:1px solid #2d4352;padding-top:9px}.grl-detail h3{margin:0;color:#dfedf2;font-size:.88rem;line-height:1.5}.grl-detail>p{margin:2px 0 8px;font-size:.78rem;line-height:1.55;color:#b3c7d3}
+.grl-neighbors{display:flex;gap:6px;flex-wrap:wrap}.grl-peer{display:grid;grid-template-columns:auto 1fr;align-items:baseline;column-gap:6px;text-align:left;font-size:.73rem;line-height:1.35;background:#162a37;color:#d6e7ed;border:1px solid #344c59;border-left:2px solid var(--rel-color);border-radius:5px;padding:5px 8px;min-width:0}.grl-peer:hover{background:#203b46;border-color:#5e8687}.grl-boundary{--rel-color:#92a9b8;border-left-style:dashed;background:transparent}.grl-direction{font-size:.65rem;color:var(--rel-color)}.grl-peer b{font-weight:600}.grl-peer small{grid-column:2;color:#adbfca;font-size:.67rem}
+.grl-foot{align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:4px 15px;color:#a5b9c7;border-top:1px solid #2a3d4c;margin-top:10px;padding-top:8px;font-size:.72rem;line-height:1.55}.grl-foot a{color:#91d8c4;text-underline-offset:2px;text-decoration:underline}
+@media(max-width:650px){.grl-panel{padding:12px}.grl-node{font-size:.76rem}.grl-play,.grl-tabs button{padding:4px 6px}.grl-head{gap:6px}.grl-neighbors{gap:5px}.grl-peer{padding:5px 6px}}
+@media(prefers-reduced-motion:reduce){.grl-node{transition:none}.grl-panel[data-moving=true] .grl-flow,.grl-panel[data-moving=true] .grl-signal{animation:none}}

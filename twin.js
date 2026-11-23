@@ -9,7 +9,7 @@
     if (className) node.className = className;
     return node;
   };
-  function mount({onLoad,onInspect,onPlan,onMix}) {
+  function mount({onLoad,onInspect,onPlan,onMix,onPreload}) {
     let project, metrics, campus, territory, locationKey, request, nearData;
     let playing = !matchMedia('(prefers-reduced-motion: reduce)').matches;
     let mode = 'campus', selected = null, station = null, active = false;
@@ -90,6 +90,7 @@
     function changeMode(nextMode) {
       if (mode !== nextMode) {
         mode = nextMode;
+        if(mode==='cutaway')onPreload?.();
         if (mode !== 'territory') selectStation(null);
         renderScene();
       }
@@ -190,7 +191,23 @@
         if (location.hash === '#overview') document.getElementById('nearby-radius')?.closest('section')?.scrollIntoView({block:'start'});
       }), {once:true});
     });
+    let beforeInspection;
     return {
+      async focusEquipment(key) {
+        beforeInspection ??= campus?.getViewState?.();
+        if(expanded())exitExpanded();
+        return campus?.focusEquipment?.(key);
+      },
+      inspectContext() {
+        const view=campus?.getViewState?.();
+        return mode==='cutaway' && view?.hallNumber ? '机房 '+String(view.hallNumber).padStart(2,'0') : (mode==='cutaway'?'机房剖视':'园区');
+      },
+      suspendForInspection() { campus?.setPlaying?.(false); territory?.setPlaying?.(false); },
+      resumeFromInspection() {
+        if(beforeInspection)campus?.restoreViewState?.(beforeInspection);
+        beforeInspection=null;
+        campus?.setPlaying?.(playing); territory?.setPlaying?.(playing);
+      },
       update(nextProject) {
         active = true;
         const projectChanged = project?.id !== nextProject.id;
@@ -214,7 +231,7 @@
         renderScene();
       },
       pause() {
-        active = false;
+        active = false; beforeInspection=null;
         if (expanded()) exitExpanded();
         request?.abort();
         request = null;

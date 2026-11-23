@@ -46,7 +46,7 @@
       && Number.isFinite(p.location.lat) && Math.abs(p.location.lat)<=90 && Number.isFinite(p.location.lon) && Math.abs(p.location.lon)<=180 && GridDesign.validateConfig(p.config);
   }
   let storeOK = true;
-  let equipment,equipmentModule,equipmentTarget,map,design,twin,activeRoute,dialogSubmit,aidcProjectId;
+  let equipment,equipmentModule,relations,map,design,twin,activeRoute,dialogSubmit,aidcProjectId;
   function loadState() {
     try {
       const data = JSON.parse(localStorage.getItem(key));
@@ -173,13 +173,71 @@
     if(!api.restore(current().aidc??null)){notice('当前清单无法在本版本恢复');return;}
     aidcProjectId=state.current;
   }
+  const inspection=$('#equipment-inspection'), equipmentPage=$('#equipment');
+  const equipmentSlot=document.createComment('设备工作台');
+  equipmentPage.before(equipmentSlot);
+  let inspectSequence=0, entryFocus, entryRevision, entryScroll=0;
+  function loadEquipment(){
+    equipmentModule ||= Promise.all([import('./equipment/workbench.js'),import('./equipment/relations.js'),import('./equipment/viewer.js').then(m=>m.studioReady)])
+      .catch(error=>{equipmentModule=null;throw error;});
+    return equipmentModule;
+  }
+  function prepareWorkbench([workbench,links]){
+    if(equipment)return;
+    relations=links.mountRelations($('#eq-relations'),{peerHost:$('#eq-port-peers'),onInspect:(category,part)=>equipment.focusTarget(part?category+'/'+part:category)});
+    $('#eq-portbar').hidden=false;
+    equipment=workbench.mount({
+      onChange:study=>{current().rackStudy=GridRackStudy.clean(study);changed();},
+      onPartChanged:selection=>{relations.update(selection);$('#eq-category-picker').value=selection.category;}
+    });
+  }
+  $('#eq-category-picker').addEventListener('change',event=>equipment?.focusTarget(event.target.value));
+  function returnToRoom(event){
+    if(!inspection.open)return;
+    event.preventDefault();history.back();
+  }
+  inspection.addEventListener('cancel',returnToRoom);
+  $('#eq-return').addEventListener('click',returnToRoom);
+  async function inspectInRoom(target){
+    const sequence=++inspectSequence;
+    const entry=document.activeElement;
+    try{
+      await Promise.all([loadEquipment(),twin.focusEquipment(target.split('/')[0])]);
+      if(sequence!==inspectSequence || activeRoute!=='twin')return;
+      entryFocus=entry; entryScroll=window.scrollY;
+      history.pushState({gridatlasInspect:target},'','#equipment');route();
+    }catch{if(sequence===inspectSequence){twin.resumeFromInspection();notice('设备暂未加载，可再次点选。');}}
+  }
+  function showInspection(){
+    if(inspection.open)return;
+    entryScroll=window.scrollY;entryRevision=current().updatedAt;
+    inspection.append(equipmentPage);equipmentPage.hidden=false;
+    $('#eq-room-context').hidden=false;
+    $('#eq-room-context').textContent=twin.inspectContext()+' · '+current().config.architecture;
+    $('#eq-return span').textContent='返回机房';
+    twin.suspendForInspection();inspection.showModal();inspection.scrollTop=0;
+    document.documentElement.classList.add('inspecting-room');
+    $('#eq-return').focus({preventScroll:true});
+  }
+  function closeInspection(){
+    inspection.close();equipmentSlot.after(equipmentPage);
+    document.documentElement.classList.remove('inspecting-room');
+    $('#eq-return span').textContent='返回园区';$('#eq-room-context').hidden=true;
+  }
   function route() {
     const allowed=['twin','equipment','overview','world','design','aidc','industry','energy','library'];
-    let id=location.hash.slice(1);if(!allowed.includes(id))id='twin';
-    if(activeRoute==='twin' && id!=='twin')twin?.pause();
-    if(activeRoute==='equipment' && id!=='equipment')equipment?.pause();
+    const hash=location.hash.slice(1);
+    const direct=/^equipment\/([a-z0-9:-]+(?:\/[a-zA-Z0-9_-]+)?)$/.exec(hash);
+    let id=direct?'equipment':hash;if(!allowed.includes(id))id='twin';
+    const wasInspecting=inspection.open, target=history.state?.gridatlasInspect;
+    const fromRoom=id==='equipment' && typeof target==='string' && twin && (activeRoute==='twin'||wasInspecting);
+    const sequence=++inspectSequence;
+    if(wasInspecting&&!fromRoom)closeInspection();
+    if((activeRoute==='twin'||wasInspecting) && !fromRoom && id!=='twin')twin?.pause();
+    if(activeRoute==='equipment' && id!=='equipment'){equipment?.pause();relations?.pause();}
+    if(fromRoom)showInspection();
     activeRoute=id;
-    for(const page of all('.page'))page.hidden=page.id!==id;
+    for(const page of all('.page'))page.hidden=page.id!==id && !(fromRoom && page.id==='twin');
     for(const a of all('[data-route]')){if(a.dataset.route===id)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');}
     if(id==='twin'){
       if(!twin)twin=GridTwin.mount({onPlan:plan=>{
@@ -189,18 +247,21 @@
       },onMix:(rows,totals)=>{
         const p=current();p.rackMix=GridRackMix.clean(rows);
         p.config={...p.config,it:totals.itMW,density:totals.density};changed();
-      },onInspect:part=>{equipmentTarget=part;goto('equipment');},onLoad:value=>{
+      },onInspect:inspectInRoom,onPreload:()=>loadEquipment().catch(()=>{}),onLoad:value=>{
         if(!Number.isFinite(value)||value<0||value>100)return;
         current().config.load=value;changed();
       }});
-      twin.update(current());
+      if(!wasInspecting||entryRevision!==current().updatedAt)twin.update(current());
+      if(wasInspecting){
+        twin.resumeFromInspection();
+        if(entryFocus?.isConnected)entryFocus.focus({preventScroll:true});
+        window.scrollTo({top:entryScroll,behavior:'instant'});
+      }
     }else if(id==='equipment') {
-      equipmentModule ||= import('./equipment/workbench.js').catch(error=>{equipmentModule=null;throw error;});
-      equipmentModule.then(module=>{
-        if(activeRoute!=='equipment')return;
-        equipment ||= module.mount({onChange:study=>{current().rackStudy=GridRackStudy.clean(study);changed();}});
-        equipment.open(current(),equipmentTarget);equipmentTarget=null;
-      }).catch(()=>{if(activeRoute==='equipment')notice('设备视图暂未加载，请刷新页面重试。');});
+      loadEquipment().then(modules=>{
+        if(activeRoute!=='equipment'||sequence!==inspectSequence)return;
+        prepareWorkbench(modules);equipment.open(current(),direct?.[1]||(typeof target==='string'?target:null));
+      }).catch(()=>{if(activeRoute==='equipment')notice('设备视图暂未加载，请重新打开。');});
     }else if(id==='overview') {
       refreshOverview();
       if(!map && window.GridMap)map=GridMap.mount($('#geo-map'),{...current().location,onPick:(lat,lon)=>setLocation(lat,lon)});
@@ -217,7 +278,7 @@
       else if(id==='energy')energyContext();
     }
     document.title=({twin:'算电数字孪生',equipment:'设备剖解',overview:'算电选址工作台',world:'全球基础设施地图',design:'方案设计',aidc:'AIDC 数据台',industry:'电力行业数据库',energy:'电价与政策资料',library:'方案库'})[id]+' · 算电图研';
-    scrollTo(0,0);
+    if(!fromRoom && !(wasInspecting && id==='twin'))scrollTo(0,0);
   }
   function goto(id) {if(location.hash==='#'+id)route();else location.hash=id;}
   window.addEventListener('hashchange',route);

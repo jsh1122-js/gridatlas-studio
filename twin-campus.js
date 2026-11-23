@@ -5,11 +5,11 @@
   const zones = ['none', 'it', 'cooling', 'power'];
   const zoneNames = {it:'数据机房', cooling:'冷却机组', power:'供配电区'};
   const pickKeys=[...zones,'rack','ups','sst','hvdc','transformer','liquid','air','switchgear'];
-  pickKeys[12]='800v';pickKeys[20]='rack:gb200';pickKeys[21]='rack:gb300';pickKeys[22]='rack:pcie';
+  pickKeys[12]='800v';pickKeys[13]='rowdist';pickKeys[14]='pdu';pickKeys[15]='psu';pickKeys[23]='fan';pickKeys[24]='network';pickKeys[20]='rack:gb200';pickKeys[21]='rack:gb300';pickKeys[22]='rack:pcie';
   const rackTypes={gb200:['GB200','#75daca'],gb300:['GB300','#e7b172'],pcie:['PCIe','#85b8e3']};
-  const equipmentTitles={'800v':'800 V 直流柜',rack:'IT 机柜',ups:'UPS 电源柜',sst:'SST 变换柜',hvdc:'直流电源柜',transformer:'隔离变压器',liquid:'液冷 CDU',air:'机房风冷',switchgear:'配电柜'};
-  const circuitIds={all:0,power:1,liquid:2,air:3,none:4};
-  const family=(id)=>id<=3?id:id===4||id>=20?1:id===9||id===10?2:3;
+  const equipmentTitles={rowdist:'列头配电',pdu:'机柜配电',psu:'机柜 PSU',fan:'EC 风扇',network:'ToR 交换机','800v':'800 V 直流柜',rack:'IT 机柜',ups:'UPS 电源柜',sst:'SST 变换柜',hvdc:'直流电源柜',transformer:'隔离变压器',liquid:'液冷 CDU',air:'机房风冷',switchgear:'配电柜'};
+  const circuitIds={all:0,power:1,liquid:2,air:3,data:4,none:5};
+  const family=(id)=>id<=3?id:id===4||id===24||(id>=20&&id<=22)?1:id===9||id===10||id===23?2:3;
   const pickKey=id=>id>=16&&id<20?'hall-'+(id-16):pickKeys[id]||null;
   const positive=(v,fallback)=>Number.isFinite(Number(v))&&Number(v)>0?Number(v):fallback;
   function campusPlan(metrics,it,density){
@@ -70,7 +70,7 @@
 
   function meshBuilder() {
     const buffer = [], faces = [];
-    let group=0,part=0,hall=0,pivot=null,transform=null,flow=null;
+    let group=0,part=0,hall=0,instance=-1,pivot=null,transform=null,flow=null;
     const world=p=>transform?[transform.dx+p[0]*transform.sx,transform.dy+p[1]*transform.sy,.43+(p[2]-.43)*transform.sz]:p;
     function face(points,hex,lit=true) {
       if(transform)points=points.map(world);
@@ -82,9 +82,9 @@
       const rgb=albedo.map((v,i)=>clamp(v*lum+[.004,.012,.027][i],0,1));
       for(let k=1;k<points.length-1;k++)for(const p of [points[0],points[k],points[k+1]]){
         const distance=flow?flow.start+(p[0]-flow.p[0])*flow.axis[0]+(p[1]-flow.p[1])*flow.axis[1]+(p[2]-flow.p[2])*flow.axis[2]:0;
-        buffer.push(...p,...albedo,...normal,group,part+hall*.1,mat,...(spin||[distance,0]));
+        buffer.push(...p,...albedo,...normal,group,part+hall*.1,mat,...(spin||[part===4?instance+1:distance,0]));
       }
-      faces.push({points,rgb,group,normal,part,hall,mat,pivot:spin,flow:flow?.start||0});
+      faces.push({points,rgb,group,normal,part,hall,mat,instance,pivot:spin,flow:flow?.start||0});
     }
     function polygon(points,z,fill,lit=false){face(points.map(([x,y])=>[x,y,z]),fill,lit);}
     function rect(x,y,w,d,z,fill){polygon([[x,y],[x+w,y],[x+w,y+d],[x,y+d]],z,fill);}
@@ -134,7 +134,7 @@
       }
       flow=null;
     }
-    return {trace,world,setTransform:v=>{transform=v;},buffer,faces,face,polygon,rect,box,prism,beam,cylinder,circle,shadow,group:key=>{group=Math.max(0,pickKeys.indexOf(key));},part:(type,n=0)=>{part=type;hall=n;},rotor:(p)=>{pivot=p;}};
+    return {trace,world,setTransform:v=>{transform=v;},buffer,faces,face,polygon,rect,box,prism,beam,cylinder,circle,shadow,group:key=>{group=Math.max(0,pickKeys.indexOf(key));},part:(type,n=0,id=-1)=>{part=type;hall=n;instance=id;},rotor:(p)=>{pivot=p;}};
   }
 
   function buildCampus(project={},metrics={}){
@@ -298,7 +298,9 @@
         box(x,y,floor+.9,w,.45,2.7,'#98aeb8','#d5e1e2');box(x,y+d-.35,floor+.9,w,.35,.72,'#97acb8','#cfdfdf');
         for(const xx of [x,x+w-.28])box(xx,y+.35,floor+.9,.28,d-.72,1.5,'#93aab7','#cedbdd');
         const lanes=clamp(Math.ceil(Math.sqrt(hall.symbols*.52)),1,6),rackCount=Math.ceil(hall.symbols/lanes);
-        const rowD=(d-20)/rackCount, laneW=(w-3.4)/lanes, rackW=Math.min(laneW*.60,2.8);
+        const rowD=(d-20)/rackCount,laneW=(w-3.4)/lanes,rackW=Math.min(laneW*.60,2.8);
+        const demoLane=Math.floor((lanes-1)/2),demoRow=Math.min(rackCount-1,Math.floor(rackCount*.55));
+        let demo=null;hall.rackPoints=[];
         for(let q=0;q<lanes;q++){
           const xx=x+1.7+q*laneW;
           m.part(3,b);m.group('it');
@@ -309,8 +311,10 @@
             const sample=mix.length?globalThis.GridRackMix?.profileAt?.(mix,drawnRacks,shownRacks):null;
             const profile=typeof sample==='string'?sample:sample?.profile,style=rackTypes[profile];
             drawnRacks++;
-            if(q===Math.floor((lanes-1)/2)&&j===Math.min(1,rackCount-1)){mark('rack',[xx+rackW*.5,yy+rackD*.55,floor+4.15]);hall.rackType=style?profile:null;}
-            m.part(4,b);m.group(style?'rack:'+profile:'rack');
+            const rackKey=style?'rack:'+profile:'rack',at=[xx+rackW*.5,yy+rackD*.52,floor+4.14],id=q*rackCount+j;
+            hall.rackPoints[id]={pos:m.world(at),key:rackKey};
+            if(q===demoLane&&j===demoRow){mark('rack',at);hall.rackType=style?profile:null;demo={xx,yy,depth:rackD};}
+            m.part(4,b,id);m.group(rackKey);
             box(xx,yy,floor+.96,rackW,rackD,3.15,'#2e4959','#6c858e');
             box(xx+.15,yy-.02,floor+2.98,rackW-.3,.09,.12,'#63c4c5');
             rect(xx+.25,yy+.23,rackW-.5,rackD-.38,floor+4.12,'#304b57');
@@ -365,9 +369,16 @@
             box(px+.55,py+bd,z+1.63,1.4,.13,.68,'#234b52');rect(px+.25,py+.18,bw-.5,.21,z+3.45,'#8fd0c2');
           }else if(key==='air'){
             box(px,py,z+.53,bw,bd,2.85,'#708fa1','#adbcc2');
+            m.group('fan');
             for(let j=0;j<2;j++){const xx=px+bw*(j+.5)/2,yy=py+bd*.5,rr=1.30;
+              if(j===0)mark('fan',[xx,yy,z+3.71]);
               cylinder(xx,yy,z+3.38,rr,.24,'#7f949d','#536977',16);m.rotor([xx,yy]);
-              for(let k=0;k<4;k++){const a=k*TAU/4;polygon([[xx,yy],[xx+Math.cos(a)*rr*.9,yy+Math.sin(a)*rr*.9],[xx+Math.cos(a+.8)*rr*.70,yy+Math.sin(a+.8)*rr*.70]],z+3.64,'#becac6');}m.rotor(null);}
+              for(let k=0;k<4;k++){const a=k*TAU/4;polygon([[xx,yy],[xx+Math.cos(a)*rr*.9,yy+Math.sin(a)*rr*.9],[xx+Math.cos(a+.8)*rr*.70,yy+Math.sin(a+.8)*rr*.70]],z+3.64,'#becac6');}m.rotor(null);
+              cylinder(xx,yy,z+3.66,.28,.13,'#506a74','#c5d1cc',10);
+              for(let k=0;k<3;k++){const ang=k*Math.PI/3,dx=Math.cos(ang)*rr,dy=Math.sin(ang)*rr;
+                beam([xx-dx,yy-dy,z+3.75],[xx+dx,yy+dy,z+3.75],.045,'#738a94',4);}
+            }
+            m.group('air');
             for(let j=0;j<7;j++)box(px+.25+j*.91,py+bd-.02,z+.93,.47,.13,1.72,'#49636e');
           }else{
             const panels=key==='switchgear'?5:key==='sst'?2:3;
@@ -379,18 +390,116 @@
               for(let k=0;k<4;k++)rect(xx+.17,py+.55+k*.61,Math.max(.15,ww-.32),.18,z+3.75,'#637985');
             }
           }
-          mark(key,[px+bw*.50,py+bd*.52,z+(key==='transformer'?3.55:3.85)]);
+          mark(key,key==='air'?[px+bw*.51,py+.30,z+3.39]:[px+bw*.50,py+bd*.52,z+(key==='transformer'?3.55:3.85)]);
         }
         m.group('it');
-        // Color-coded internal paths connect the service gallery to the IT rows.
-        const low=z+.40,hi=z+4.62;
-        const powerFeed=conversion==='sst'?[[11.9,10.3,hi],[20.2,10.3,hi]]:[[11.9,10.3,hi],[3.8,10.3,hi],[3.8,7.0,hi],[20.2,7.0,hi],[20.2,10.3,hi]];
-        m.trace([...powerFeed,[20.2,5.75,hi],[1.75,5.75,hi],[1.75,-24,hi]],9,.17,'#c49c60');
-        if(config.cooling!=='风冷'){
-          m.trace([[12,19.4,hi],[9.2,19.4,hi],[9.2,6.6,hi],[5.0,6.6,hi],[5.0,-24.2,hi]],10,.18,'#54ada9');
-          m.trace([[5.55,-24.2,hi],[5.55,6.13,hi],[9.75,6.13,hi],[9.75,18.8,hi],[12,18.8,hi]],12,.18,'#ae86aa');
+        // The representative branch is continuous from its source to a particular enclosure.
+        // All routes and redundant feed labels are local schematic assumptions.
+        if(demo){
+          const rx=demo.xx,ry=demo.yy,rd=demo.depth,rear=ry+rd,rTop=floor+4.13;
+          const ac=conversion==='ups',pA=rx+.17,pB=rx+rackW-.17,pY=rear+.16,netY=ry+.38;
+          const rowX=clamp(rx-.35,1.0,20.5),rowY=3.4,rowW=3.35,rowD=2.7,rowTop=z+4.30;
+          const tHigh=z+5.25,powerX=rx+rackW+.42,dataX=rx-.61;
+          // Freestanding row distribution equipment: warm breaker covers for AC, guarded +/- bars for DC.
+          m.group('rowdist');box(rowX-.16,rowY-.14,z+.04,rowW+.32,rowD+.28,.26,'#617781','#95a6a5');
+          box(rowX,rowY,z+.30,rowW,rowD,4.0,ac?'#63778a':'#557b83','#abbcbd');
+          for(let k=0;k<2;k++){
+            const px=rowX+k*rowW/2+.10,ww=rowW/2-.19;
+            box(px,rowY+rowD-.01,z+.57,ww,.15,3.41,'#405768','#78929a');
+            for(let j=0;j<5;j++)box(px+.16,rowY+rowD+.13,z+.95+j*.42,ww-.34,.11,.20,ac?'#d9b174':k?'#82abc5':'#bc8f78');
+            box(px+.20,rowY+rowD+.13,z+3.30,ww-.4,.1,.31,'#89c1be');
+          }
+          for(let j=0;j<6;j++)rect(rowX+.2,rowY+.23+j*.34,rowW-.4,.1,rowTop+.02,'#708a92');
+          mark('rowdist',[rowX+rowW*.55,rowY+rowD*.55,rowTop+.05]);
+          // A/B outlet strips or DC branch bars are mounted just outside the rack rear side.
+          m.group('pdu');
+          for(const [px,tone] of [[pA,'#e2aa6e'],[pB,'#85b9ce']]){
+            box(px-.12,pY-.05,z+.25,.24,.26,3.05,'#374d59',tone);
+            for(let j=0;j<7;j++)box(px-.09,pY+.20,z+.47+j*.34,.18,.08,.15,tone);
+            cylinder(px,pY+.08,rTop+.04,.15,.19,'#516873',tone,8);
+          }
+          // Rack power shelf: two cassettes with a rear handle, status strip and intake perforations.
+          const serviceY=rear+.35,serviceW=Math.max(.95,rackW-.5),sx=rx+(rackW-serviceW)/2;
+          m.group('psu');box(sx-.08,serviceY-.22,rTop-.96,serviceW+.16,.85,1.17,'#435b66','#a9b7b7');
+          for(let j=0;j<2;j++){
+            const xx=sx+j*serviceW/2,ww=serviceW/2-.05;
+            box(xx,serviceY+.49,rTop-.80,ww,.25,.79,'#81969b','#bec8c7');
+            for(let k=0;k<4;k++)box(xx+.08+k*Math.max(.09,(ww-.2)/4),serviceY+.75,rTop-.59,.055,.05,.30,'#3b545d');
+            box(xx+.04,serviceY+.78,rTop-.22,ww-.08,.08,.065,'#8fd8c9');
+            rect(xx+.07,serviceY-.10,Math.max(.10,ww-.14),.57,rTop+.235,'#889a9d');
+            for(let k=0;k<4;k++)rect(xx+.11,serviceY-.03+k*.105,Math.max(.10,ww-.22),.045,rTop+.241,'#445d66');
+            box(xx+.11,serviceY+.32,rTop+.245,Math.max(.15,ww-.22),.16,.12,j?'#86bcb6':'#bc956a');
+            beam([xx+.08,serviceY+.78,rTop-.53],[xx+ww-.08,serviceY+.78,rTop-.53],.045,'#c1ccc7',5);
+          }
+          mark('psu',[sx+serviceW*.52,serviceY+.35,rTop+.23]);
+          // Demarcation/power tap box is a separate, identifiable pick target on the overhead branch.
+          const tapY=rear+1.36;
+          m.group('pdu');box(powerX-.30,tapY-.43,tHigh-.49,.65,.87,.50,'#767c77','#d1ac78');
+          box(powerX+.22,tapY-.28,tHigh-.49,.17,.55,.35,'#9c967f','#d6b77f');mark('pdu',[powerX,tapY,tHigh+.03]);
+          // Dedicated data equipment: top-of-rack switch, copper access and an overhead fiber uplink.
+          m.group('network');box(rx-.07,ry-.32,rTop+.04,rackW+.14,1.05,.57,'#526878','#94abb5');
+          for(let k=0;k<6;k++){
+            const xx=rx+.06+k*(rackW-.12)/6;
+            box(xx,ry-.36,rTop+.15,Math.max(.1,(rackW-.35)/6),.10,.19,'#273d49');
+            rect(xx,ry-.22,(rackW-.35)/6,.11,rTop+.625,k<3?'#c4a1d7':'#92bcb4');
+          }
+          mark('network',[rx+rackW*.49,ry+.13,rTop+.64]);
+          // Short NIC patch lead and panel at the rack rear; the separate optical uplink terminates at the row patch field.
+          const opticX=clamp(rowX-3.30,.30,20),opticY=3.4;
+          box(opticX,opticY,z+.27,2.20,2.2,3.94,'#58697d','#9aa8b7');
+          for(let q=0;q<5;q++){box(opticX+.14,opticY+2.2,z+.88+q*.57,1.92,.14,.34,'#425267');for(let k=0;k<5;k++)box(opticX+.22+k*.35,opticY+2.32,z+.98+q*.57,.20,.06,.12,'#c9aad8');}
+          function ladder(x1,y1,x2,y2,alt,half,tone){
+            const dx=x2-x1,dy=y2-y1,len=Math.hypot(dx,dy);if(len<.4)return;
+            const nx=-dy/len,ny=dx/len,rail=(s,zz,r,col)=>beam([x1+nx*s,y1+ny*s,zz],[x2+nx*s,y2+ny*s,zz],r,col,4);
+            rail(-half,alt,.083,tone);rail(half,alt,.083,tone);
+            const steps=Math.max(1,Math.floor(len/1.15));
+            for(let j=0;j<=steps;j++){const t=j/steps,xx=x1+t*dx,yy=y1+t*dy;
+              beam([xx-nx*half,yy-ny*half,alt],[xx+nx*half,yy+ny*half,alt],.056,tone,4);
+              if(j%5===0){
+                beam([xx-nx*half,yy-ny*half,alt-.11],[xx+nx*half,yy+ny*half,alt-.11],.09,'#b7c5c2',4);
+                for(const side of [-1,1])beam([xx+side*nx*half,yy+side*ny*half,alt],[xx+side*nx*half,yy+side*ny*half,alt+.66],.042,'#87999e',4);
+              }
+            }
+          }
+          m.group('it');
+          const fromRowX=rowX+rowW*.68,fromRowY=rowY+rowD*.51;
+          const trunkY=6.40;
+          ladder(3.8,trunkY,20.4,trunkY,tHigh-.22,.32,'#9a9382');
+          ladder(3.8,10.3,20.2,10.3,tHigh-.22,.30,'#9a9382');ladder(20.2,10.3,20.2,trunkY,tHigh-.22,.30,'#9a9382');
+          if(conversion!=='sst')ladder(3.8,10.3,3.8,trunkY,tHigh-.22,.30,'#9a9382');
+          ladder(fromRowX,fromRowY,powerX,fromRowY,tHigh-.22,.33,'#a49881');
+          ladder(dataX,opticY+.92,opticX+1.05,opticY+.92,tHigh+.36,.29,'#8b9aab');
+          // Independent rack-side supports carry the power ladder and the communications basket.
+          for(const [rail,other,yy,height] of [[powerX,powerX+.48,tapY+1.30,tHigh],[dataX,dataX-.35,opticY+.90,tHigh+.58]]){
+            beam([other,yy,z],[other,yy,height+.62],.094,'#9cadad',4);
+            beam([other,yy,height+.62],[rail,yy,height+.62],.08,'#b3c1c2',4);
+            beam([rail,yy,height+.62],[rail,yy,height-.20],.052,'#7e9296',4);
+          }
+          ladder(powerX,tapY,powerX,fromRowY,tHigh-.22,.33,'#a49881');
+          ladder(dataX,netY,dataX,opticY+.92,tHigh+.36,.29,'#8b9aab');
+          // Two continuous adjacent feeders branch at the overhead tap, then descend to the two rack strips.
+          const head=conversion==='sst'?[[11.9,10.3,z+3.84],[11.9,10.3,tHigh],[20.2,10.3,tHigh]]:
+            [[11.9,10.3,z+3.84],[11.9,10.3,tHigh],[3.8,10.3,tHigh],[3.8,trunkY,tHigh],[20.2,trunkY,tHigh],[20.2,10.3,tHigh]];
+          m.trace([...head,[20.2,10.3,z+3.94]],9,.14,'#bc985f');
+          m.trace([[19.5,9.5,z+3.96],[19.5,9.5,tHigh+.22],[19.5,trunkY,tHigh+.22],[fromRowX,trunkY,tHigh+.22],[fromRowX,fromRowY,tHigh+.22],[fromRowX,fromRowY,rowTop+.04]],9,.15,'#cfad77');
+          for(const [sign,rail] of [[-1,pA],[1,pB]]){
+            const lateral=powerX+sign*.12,off=sign*.15;
+            m.trace([[fromRowX+off,fromRowY,rowTop+.04],[fromRowX+off,fromRowY,tHigh],[lateral,fromRowY,tHigh],[lateral,tapY,tHigh],[lateral,tapY,tHigh-.66],[rail,tapY,tHigh-.66],[rail,pY,tHigh-.66],[rail,pY,rTop+.23]],9,.095,sign<0?'#d4af71':'#a98e6c');
+            m.trace([[rail,pY,rTop-.12],[rail,pY+.31,rTop-.12],[sx+serviceW*(sign<0?.25:.75),pY+.31,rTop-.12],[sx+serviceW*(sign<0?.25:.75),serviceY+.48,rTop-.12]],9,.065,'#cdac76');
+          }
+          const entry=rx+rackW*.76;
+          m.trace([[entry,rear+.100,rTop-1.4],[entry,rear+.47,rTop-1.4],[rx+rackW+.10,rear+.47,rTop-1.4],[rx+rackW+.10,netY,rTop-1.4],[rx+rackW+.10,netY,rTop+.34],[rx+rackW-.05,netY,rTop+.34]],14,.075,'#adb0cd');
+          m.trace([[rx+.21,netY,rTop+.55],[rx+.21,netY,tHigh+.52],[dataX,netY,tHigh+.52],[dataX,opticY+.9,tHigh+.52],[opticX+1.05,opticY+.9,tHigh+.52],[opticX+1.05,opticY+.9,z+4.28]],13,.13,'#a78acc');
+          // Liquid lines run on a third offset, with separate supply and return terminations at the rack manifold.
+          const serviceX=rx+rackW+.93,tz=tHigh-.8;
+          if(config.cooling!=='风冷'){
+            m.trace([[12,19.4,z+3.49],[12,19.4,tz],[9.2,19.4,tz],[9.2,6.75,tz],[serviceX,6.75,tz],[serviceX,rear+.55,tz],[serviceX,rear+.55,rTop-.55],[rx+rackW+.01,rear+.55,rTop-.55]],10,.14,'#54ada9');
+            m.trace([[rx+rackW+.01,rear+.87,rTop-.82],[serviceX+.27,rear+.87,rTop-.82],[serviceX+.27,rear+.87,tz],[serviceX+.27,7.10,tz],[9.6,7.10,tz],[9.6,18.8,tz],[12.9,18.8,tz],[12.9,18.8,z+3.51]],12,.14,'#ae86aa');
+          }
+          // Air travels through the supply plenum then the adjacent cold aisle to the representative rack intake.
+          const low=z+.41,aisle=rx-.39;
+          m.trace([[4.65,18.0,z+3.75],[4.65,18.0,z+4.33],[.76,18.0,z+4.33],[.76,5.2,z+4.33],[.76,5.2,low],[aisle,5.2,low],[aisle,ry+rd*.45,low],[rx-.04,ry+rd*.45,z+.80]],11,.17,'#719db5');
         }
-        m.trace([[4.65,18.0,z+4.42],[.70,18.0,z+4.42],[.70,5.1,z+4.42],[3.1,5.1,low],[3.1,-21.4,low]],11,.21,'#719db5');
         const header=y+1.25;
         box(x+.65,header,floor+4.65,w-1.30,.48,.55,'#a87e54','#cda661');
         for(let i=0;i<3;i++)box(x+.74+i*(w-1.8)/3,header+.1,floor+1,.44,.22,3.65,'#879ca1');
@@ -523,7 +632,7 @@
       precision highp float;
       varying vec3 vColor,vWorld,vNormal,vTag;
       varying float vGate;varying vec2 vInfo;
-      uniform float uPass,uCut,uTime,uLoad,uShadowScale,uCircuit;uniform vec4 uCuts;
+      uniform float uPass,uCut,uTime,uLoad,uShadowScale,uCircuit;uniform vec4 uCuts,uAim;
       uniform vec3 uSelection;
       uniform vec4 uView;
       uniform sampler2D uShadow;
@@ -539,12 +648,12 @@
       void main(){
         float part=vTag.y,mat=vTag.z;
         if(part>=1.&&part<=2.&&vWorld.y>vGate)discard;
-        float channel=mat==9.?1.:mat==11.?3.:2.;
-        if(mat>=9.&&uCircuit>.5&&abs(channel-uCircuit)>.2)discard;
+        float channel=mat>=13.?4.:mat==9.?1.:mat==11.?3.:2.;
+        if(mat>=9.&&(uCircuit>4.5||uPass==2.))discard;
         if(uPass==1.){vec2 enc=fract(gl_FragCoord.z*vec2(1.,255.));enc.x-=enc.y/255.;gl_FragColor=vec4(enc,0.,1.);return;}
         if(uPass==2.){
           float hit=(part==1.||part==2.)&&vTag.x==1.?16.+vInfo.x:part==4.&&vTag.x<20.?4.:vTag.x;
-          gl_FragColor=vec4(hit/255.,0.,0.,1.);return;
+          gl_FragColor=vec4(hit/255.,part==4.?vInfo.y/255.:0.,0.,1.);return;
         }
         vec3 n=normalize(vNormal),eye=vec3(uView.y*uView.w,uView.x*uView.w,uView.z),h=normalize(light+eye);
         float top=max(0.,n.z),nd=max(0.,dot(n,light)),nv=max(0.,dot(n,eye)),fres=pow(1.-nv,3.);
@@ -569,17 +678,22 @@
         else if(mat==8.)col+=vec3(.008,.030,.036)*fres;
         else if(mat>=9.){
           float bulb=pow(max(cos((vInfo.y-uTime*8.)*.55),0.),6.);
-          vec3 ec=mat==9.?vec3(1.,.74,.38):mat==10.?vec3(.40,.99,.87):mat==11.?vec3(.43,.75,1.):vec3(.98,.65,.85);
-          col=mix(col,ec,.23+(.21+.56*bulb)*step(.001,uLoad)+step(.5,uCircuit)*.12);
+          vec3 ec=mat==9.?vec3(1.,.74,.38):mat==10.?vec3(.40,.99,.87):mat==11.?vec3(.43,.75,1.):mat==12.?vec3(.98,.65,.85):mat==13.?vec3(.76,.65,1.):vec3(.73,.82,.96);
+          col=mix(col,ec,.25+(.18+.55*bulb)*step(.001,uLoad)+step(.5,uCircuit)*.15);
+          if(uCircuit>.5&&abs(channel-uCircuit)>.2)col=mix(vec3(.17,.21,.235),col,.12);
         }
         float localCut=vInfo.x<.5?uCuts.x:vInfo.x<1.5?uCuts.y:vInfo.x<2.5?uCuts.z:uCuts.w;
         if(part>=1.&&part<=2.&&localCut>.18&&localCut<.96){
           float rim=1.-smoothstep(.06,.35,abs(vGate-vWorld.y));col=mix(col,vec3(.54,.92,.87),rim*.8);
         }
-        float family=vTag.x<3.5?vTag.x:(vTag.x==4.||vTag.x>=20.)?1.:(vTag.x==9.||vTag.x==10.)?2.:3.;
+        float family=vTag.x<3.5?vTag.x:(vTag.x==4.||vTag.x==24.||(vTag.x>=20.&&vTag.x<=22.))?1.:(vTag.x==9.||vTag.x==10.||vTag.x==23.)?2.:3.;
         float selected=family<.5?0.:family<1.5?uSelection.x:family<2.5?uSelection.y:uSelection.z;
         vec3 accent=vTag.x<1.5?vec3(.16,.68,.67):vTag.x<2.5?vec3(.93,.56,.24):vec3(.33,.58,.91);
         col=col*(1.+selected*.04)+accent*selected*(.034+.095*fres);
+        if(uAim.w>.5&&abs(vTag.x-uAim.w)<.25){
+          vec3 ds=vWorld-uAim.xyz;float local=exp(-dot(ds,ds)*.083);
+          col+=vec3(.10,.22,.19)*local*(.46+fres);
+        }
         gl_FragColor=vec4(clamp(col,0.,1.),1.);
       }`;
     const shaders=[];
@@ -592,7 +706,7 @@
     if(!gl.getProgramParameter(prog,gl.LINK_STATUS))throw new Error('场景着色器连接失败');
     gl.useProgram(prog);
     const vb=gl.createBuffer(),U={};
-    for(const n of ['View','Screen','Cut','Time','Pass','Load','ShadowScale','Selection','Shadow','Circuit','Cuts'])U[n]=gl.getUniformLocation(prog,'u'+n);
+    for(const n of ['View','Screen','Cut','Time','Pass','Load','ShadowScale','Selection','Shadow','Circuit','Cuts','Aim'])U[n]=gl.getUniformLocation(prog,'u'+n);
     const attrs=[['aPos',3,0],['aColor',3,12],['aNormal',3,24],['aMeta',3,36],['aPivot',2,48]].map(([n,k,off])=>[gl.getAttribLocation(prog,n),k,off]);
     const shadowSize=Math.min(1536,gl.getParameter(gl.MAX_TEXTURE_SIZE));
     function texture(size,data){
@@ -613,7 +727,7 @@
       for(const [a,n,o] of attrs){gl.enableVertexAttribArray(a);gl.vertexAttribPointer(a,n,gl.FLOAT,false,56,o);}
       gl.uniform4f(U.View,cam.ca,cam.sa,cam.sp,cam.cp);
       gl.uniform4f(U.Screen,2*cam.scale/cam.width,2*cam.scale/cam.height,2*cam.cx/cam.width-1,1-2*cam.cy/cam.height);
-      gl.uniform4fv(U.Cuts,cam.cuts);gl.uniform1f(U.Circuit,cam.circuit);gl.uniform1f(U.Cut,cam.cut);gl.uniform1f(U.Time,cam.time);gl.uniform1f(U.Load,cam.load);gl.uniform3fv(U.Selection,cam.highlight);
+      gl.uniform4fv(U.Cuts,cam.cuts);gl.uniform4fv(U.Aim,cam.aim);gl.uniform1f(U.Circuit,cam.circuit);gl.uniform1f(U.Cut,cam.cut);gl.uniform1f(U.Time,cam.time);gl.uniform1f(U.Load,cam.load);gl.uniform3fv(U.Selection,cam.highlight);
       gl.uniform1i(U.Shadow,0);gl.uniform1f(U.ShadowScale,1.15/shadowSize);gl.activeTexture(gl.TEXTURE0);
       const shadowStep=cam.cuts.reduce((sig,v)=>sig*31+Math.round(v*28),cam.circuit);
       if(hasShadow&&shadowStep!==lastShadow){
@@ -626,7 +740,7 @@
       gl.uniform1f(U.Pass,pick?2:0);gl.drawArrays(gl.TRIANGLES,0,count);
     }
     return {draw,upload(model){gl.bindBuffer(gl.ARRAY_BUFFER,vb);gl.bufferData(gl.ARRAY_BUFFER,model.vertices,gl.STATIC_DRAW);count=model.vertices.length/14;lastShadow=-10;},
-      pick(x,y,cam,selected){draw(cam,selected,true);const pix=new Uint8Array(4);gl.readPixels(clamp(Math.floor(x*canvas.width/cam.width),0,canvas.width-1),clamp(canvas.height-1-Math.floor(y*canvas.height/cam.height),0,canvas.height-1),1,1,gl.RGBA,gl.UNSIGNED_BYTE,pix);draw(cam,selected);return pickKey(pix[0]);},
+      pick(x,y,cam,selected){draw(cam,selected,true);const pix=new Uint8Array(4);gl.readPixels(clamp(Math.floor(x*canvas.width/cam.width),0,canvas.width-1),clamp(canvas.height-1-Math.floor(y*canvas.height/cam.height),0,canvas.height-1),1,1,gl.RGBA,gl.UNSIGNED_BYTE,pix);draw(cam,selected);return pix[1]?{key:pickKey(pix[0]),rack:pix[1]-1}:pickKey(pix[0]);},
       dispose(){gl.deleteFramebuffer(fb);gl.deleteRenderbuffer(rb);gl.deleteTexture(shadow);gl.deleteTexture(fallback);gl.deleteBuffer(vb);for(const shader of shaders)gl.deleteShader(shader);gl.deleteProgram(prog);gl.getExtension('WEBGL_lose_context')?.loseContext();}};
   }
   // The CPU renderer uses the same vertices, camera and per-pixel depth test.
@@ -641,7 +755,7 @@
       const width=canvas.width,height=canvas.height,sel=zones.indexOf(selected);
       if(!frame||width!==frame.width||height!==frame.height){
         frame=ctx.createImageData(width,height);pixels=new Uint32Array(frame.data.buffer);
-        depth=new Float32Array(width*height);ids=new Uint8Array(width*height);
+        depth=new Float32Array(width*height);ids=new Uint16Array(width*height);
       }
       pixels.fill(0);depth.fill(-Infinity);ids.fill(0);
       const sx=width/cam.width,sy=height/cam.height;
@@ -658,7 +772,7 @@
           for(let x=x0;x<=x1;x++,u+=ux,v+=vx,k++){
             if(u<-.000001||v<-.000001||u+v>1.000001)continue;
             const z=a[2]+u*db+v*dc;
-            if(z>=depth[k]-.000004){pixels[k]=ink;depth[k]=z;ids[k]=id;}
+            if(z>=depth[k]-.000004){pixels[k]=ink;depth[k]=z;if(id!==-1)ids[k]=id;}
           }
         }
       }
@@ -666,7 +780,7 @@
       for(const face of model.faces){
         const {part,hall,mat}=face,zone=face.group||0,isOuter=part===1||part===2;
         if(part>=3&&cam.cuts[hall]<.002)continue;
-        const channel=mat===9?1:mat===11?3:2;if(mat>=9&&cam.circuit!==0&&cam.circuit!==channel)continue;
+        const channel=mat>=13?4:mat===9?1:mat===11?3:2;if(mat>=9&&cam.circuit===5)continue;
         const cs=isOuter?phase[hall][part-1]:null;
         if(cs&&cs.clip<-32.3)continue;
         let points=face.points;
@@ -685,16 +799,19 @@
           if(cs&&cs.lift)w=[w[0],w[1],w[2]+cs.lift];
           const q=projectPoint(w,cam);q[0]*=sx;q[1]*=sy;return q;
         });
-        let ink=zone>0&&cam.highlight[family(zone)-1]>.35?face.activeInk:face.ink;
+        const focusNear=cam.aim[3]===zone&&zone>0&&Math.hypot(face.points[0][0]-cam.aim[0],face.points[0][1]-cam.aim[1])<3;
+        let ink=(zone>0&&cam.highlight[family(zone)-1]>.35)||focusNear?face.activeInk:face.ink;
         if(mat>=9&&cam.load>0){
-          if(Math.cos((face.flow-cam.time*8)*.55)>.6)ink=mat===9?0xff72ceff:mat===10?0xffc5f69e:mat===11?0xffffbe7f:0xffe4a9ef;
+          if(Math.cos((face.flow-cam.time*8)*.55)>.6)ink=mat===9?0xff72ceff:mat===10?0xffc5f69e:mat===11?0xffffbe7f:mat===12?0xffe4a9ef:mat===13?0xfff2b5d0:0xffffdfc7;
         }
-        for(let i=1;i<p.length-1;i++)triangle(p[0],p[i],p[i+1],ink,isOuter&&zone===1?16+hall:part===4&&zone<20?4:zone);
+        if(mat>=9&&cam.circuit!==0&&cam.circuit!==channel)ink=0xff41382e;
+        const id=mat>=9?-1:isOuter&&zone===1?16+hall:part===4?((zone<20?4:zone)|((face.instance+1)<<5)):zone;
+        for(let i=1;i<p.length-1;i++)triangle(p[0],p[i],p[i+1],ink,id);
       }
       ctx.putImageData(frame,0,0);
     }
     return {draw,upload(m){model=m;for(const f of model.faces){f.ink=colorWord(f.rgb,false);f.activeInk=colorWord(f.rgb,true);}},
-      pick(x,y,cam){const id=ids&&ids[Math.floor(y*canvas.height/cam.height)*canvas.width+Math.floor(x*canvas.width/cam.width)];return pickKey(id);},
+      pick(x,y,cam){const id=ids&&ids[Math.floor(y*canvas.height/cam.height)*canvas.width+Math.floor(x*canvas.width/cam.width)];return id>31?{key:pickKey(id&31),rack:(id>>5)-1}:pickKey(id);},
       dispose(){model=frame=pixels=depth=ids=null;}};
   }
 
@@ -724,9 +841,47 @@
     let project={},metrics={},mode='campus',selected=null,openIndex=0,circuit='all',yaw=yaw0,pitch=pitch0,zoom=1;
     let cam=null,model=null,renderer=null,signature='',scheduled=0,dirty=true,disposed=false;
     const media=window.matchMedia('(prefers-reduced-motion: reduce)');
-    let playing=!media.matches,cut=0,cutTarget=0,fx=0,fy=0,activeTime=0,prev=0,groundKey='',delayed=0,inViewport=true;
-    let wanted={yaw,pitch,zoom,fx:0,fy:0};const highlight=[0,0,0],cuts=[0,0,0,0];
+    let playing=!media.matches,cut=0,cutTarget=0,fx=0,fy=0,fz=0,activeTime=0,prev=0,groundKey='',delayed=0,inViewport=true;
+    let wanted={yaw,pitch,zoom,fx:0,fy:0,fz:0};const highlight=[0,0,0],cuts=[0,0,0,0];
+    let travel=null,focusKey=null,aim=[0,0,0,0],returnView=null,lastPick=null,restorePending=null;
+    const cameraKeys=['yaw','pitch','zoom','fx','fy','fz'];
+    function cancelTravel(){
+      if(travel){const old=travel;travel=null;wanted={yaw,pitch,zoom,fx,fy,fz};old.resolve(false);}
+    }
+    function cameraState(){
+      return {version:1,mode,circuit,selected,hallNumber:(model?.plan.dims[openIndex]?.index??openIndex)+1,openIndex,
+        camera:{yaw,pitch,zoom,fx,fy,fz}};
+    }
+    function getViewState(){return returnView?{...returnView,camera:{...returnView.camera}}:cameraState();}
+    function restoreViewState(v){
+      if(!v||v.version!==1||!v.camera||!cameraKeys.every(k=>Number.isFinite(v.camera[k]))||!['campus','cutaway'].includes(v.mode))return false;
+      if(!model||dirty){restorePending=v;requestDraw();return true;}
+      cancelTravel();returnView=null;lastPick=null;focusKey=null;aim=[0,0,0,0];
+      let index=model.plan.dims.findIndex(h=>h.index+1===v.hallNumber);if(index<0)index=clamp(Math.trunc(v.openIndex)||0,0,model.plan.dims.length-1);
+      openIndex=index;mode=v.mode;circuit=Object.hasOwn(circuitIds,v.circuit)?v.circuit:'all';selected=zones.includes(v.selected)?v.selected:null;
+      cutTarget=mode==='cutaway'?1:0;cuts.fill(0);cuts[openIndex]=cutTarget;cut=cutTarget;
+      const cc=v.camera;wanted={yaw:cc.yaw,pitch:clamp(cc.pitch,.24,1.18),zoom:clamp(cc.zoom,.52,24),fx:clamp(cc.fx,-95,95),fy:clamp(cc.fy,-75,75),fz:clamp(cc.fz,0,30)};
+      ({yaw,pitch,zoom,fx,fy,fz}=wanted);
+      requestDraw();return true;
+    }
+    function focusEquipment(key){
+      if(disposed||!model||!inViewport||document.hidden||typeof key!=='string')return Promise.resolve(false);
+      const h=model.plan.dims[openIndex],rackKey=key.startsWith('rack:')||key==='rack',coarse=mode==='campus'&&zones.slice(1).includes(key);
+      if(mode!=='cutaway'&&!coarse)return Promise.resolve(false);
+      const matching=rackKey&&key!=='rack'?h.rackPoints.find(n=>n.key===key):null;
+      const target=coarse?model.anchors[key]:lastPick?.key===key?lastPick.pos:matching?.pos||h.points[rackKey?'rack':key];
+      if(!target)return Promise.resolve(false);
+      if(travel&&focusKey===key&&aim.slice(0,3).every((v,i)=>v===target[i]))return travel.promise;
+      cancelTravel();if(!returnView)returnView=cameraState();
+      focusKey=key;aim=[...target,Math.max(0,pickKeys.indexOf(key))];const start={yaw,pitch,zoom,fx,fy,fz};
+      const small=['pdu','psu','network','fan'].includes(key),fromZoom=returnView.camera.zoom,angle=small?-.76:-.90;
+      wanted={yaw:yaw+Math.atan2(Math.sin(angle-yaw),Math.cos(angle-yaw)),pitch:small?.93:.89,zoom:clamp(fromZoom*(small?2.40:1.80),2.4,24),fx:target[0],fy:target[1],fz:target[2]};
+      let notify;const promise=new Promise(r=>{notify=r;});
+      travel={promise,resolve:notify,start,dest:{...wanted},at:performance.now(),ms:media.matches?0:560};
+      requestDraw();return promise;
+    }
     function focus(key){
+      cancelTravel();returnView=null;focusKey=null;lastPick=null;aim=[0,0,0,0];wanted.fz=0;
       if(mode==='cutaway'&&model){
         const h=model.plan.dims[openIndex]||model.plan.dims[0];
         const angle=-.96,elevation=.99,W=wrapper.clientWidth||850,H=wrapper.clientHeight||440;
@@ -761,11 +916,12 @@
     hallInfo.style.cssText='position:absolute;z-index:2;left:9px;bottom:9px;max-width:calc(100% - 56px);display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px;padding:4px 7px;background:#0d1c29e8;border:1px solid #35515e;border-radius:5px;color:#bfd0d6;font:500 10px/1.3 system-ui,"PingFang SC",sans-serif;';
     hallMenu.setAttribute('aria-label','切换剖视机房');hallMenu.style.cssText='font:inherit;color:#b2dfd5;background:#142c34;border:1px solid #36555a;border-radius:3px;padding:1px 2px;cursor:pointer;color-scheme:dark';
     hallMenu.addEventListener('change',()=>{openIndex=Number(hallMenu.value);focus(selected);requestDraw();});
+    const relation=document.createElement('span');relation.style.cssText='padding-left:5px;color:#bfd3d7;border-left:1px solid #3b535c;';
     const lineLegend=document.createElement('span');
     lineLegend.style.cssText='display:flex;gap:6px;align-items:center;flex-wrap:wrap;';
-    const entries=[['power','供电','#f4bd74'],['liquid','供液','#76daca'],['liquid','回液','#e3a5d0'],['air','送风','#82b8e2']];
+    const entries=[['power','供电','#f4bd74'],['liquid','供液','#76daca'],['liquid','回液','#e3a5d0'],['air','送风','#82b8e2'],['data','光纤','#c3a5ed'],['data','铜缆','#b7c6e3']];
     for(const [type,title,color] of entries){const tag=document.createElement('span');tag.dataset.circuit=type;tag.textContent='→ '+title;tag.style.color=color;lineLegend.append(tag);}
-    hallInfo.append(hallMenu,hallNote,lineLegend);wrapper.append(hallInfo);
+    hallInfo.append(hallMenu,hallNote,lineLegend,relation);wrapper.append(hallInfo);
     const format=n=>Math.round(n).toLocaleString('zh-CN');
     function info(){
       const p=model.plan,cutaway=mode==='cutaway',h=p.dims[openIndex];hallMenu.style.display=cutaway?'':'none';if(hallMenu.value!==String(openIndex))hallMenu.value=String(openIndex);
@@ -775,6 +931,10 @@
       if(hallNote.textContent!==message)hallNote.textContent=message;
       const currentConfig=project.config||{};lineLegend.style.display=cutaway&&circuit!=='none'?'flex':'none';
       for(const entry of lineLegend.children){const key=entry.dataset.circuit;entry.style.display=(circuit==='all'||key===circuit)&&(key!=='liquid'||currentConfig.cooling!=='风冷')?'':'none';}
+      const ac=currentConfig.architecture==='交流 UPS'||!currentConfig.architecture,liquid=currentConfig.cooling!=='风冷';
+      const connection={power:ac?'进线 → UPS → 列头柜 → A/B PDU → PSU':'进线 → 直流变换 → 列端柜 → 母线分支 → 柜端电源',
+        data:'网卡 → 铜缆接入 → ToR → 光纤上联',liquid:liquid?'CDU 供液 → 机柜换热 → 回液至 CDU':'该方案采用风冷',air:'风机 → 送风通道 → 机柜进风口'}[circuit];
+      relation.style.display=cutaway&&connection?'':'none';if(connection&&relation.textContent!==connection)relation.textContent=connection;
       hallInfo.title=message+(p.whiteSpaceM2?' · IT 净面积 '+format(p.whiteSpaceM2)+' m²':'')+(p.grossM2?' · 估算建筑面积 '+format(p.grossM2)+' m²':'');
     }
     function openHall(index){
@@ -784,17 +944,22 @@
       if(typeof options.onOpenHall==='function')options.onOpenHall();
       else{mode='cutaway';cutTarget=1;focus('it');requestDraw();}
     }
-    function handleHit(key){
+    function handleHit(hit){
+      const key=typeof hit==='string'?hit:hit?.key;
       if(!key)return;
+      const picked=typeof hit==='object'&&Number.isInteger(hit.rack)?model.plan.dims[openIndex]?.rackPoints[hit.rack]:null;
+      lastPick=picked?{key,pos:picked.pos}:null;
       if(mode==='campus'&&(key==='it'||key.startsWith('hall-'))){openHall(key.startsWith('hall-')?Number(key.slice(5)):undefined);return;}
       if(mode==='cutaway'&&key.startsWith('hall-')){openIndex=clamp(Number(key.slice(5)),0,model.plan.dims.length-1);focus(selected);requestDraw();return;}
       if(mode==='cutaway'&&(equipmentTitles[key]||key.startsWith('rack:'))){
         if(typeof options.onInspect==='function')options.onInspect(key);else select(zones[family(pickKeys.indexOf(key))],true);
       }else if(zones.includes(key)&&key!=='none'){select(key,true);}
     }
-    const labelKeys=[...zones.slice(1),...Object.keys(equipmentTitles)];
+    const labelKeys=[...zones.slice(1),'rack','transformer','switchgear','ups','sst','800v','hvdc','liquid','air','rowdist','pdu','psu','fan','network'];
+    const channelMembers={power:['switchgear','transformer','ups','sst','hvdc','800v','rowdist','pdu','psu'],liquid:['liquid','rack'],air:['air','fan','rack'],data:['network','rack']};
+    const advanced=new Set(['pdu','psu','fan']);
     for(const key of labelKeys){
-      const unit=Boolean(equipmentTitles[key]),nameText=unit?equipmentTitles[key]:zoneNames[key],color=unit?(['liquid','rack'].includes(key)?'#76d7c6':key==='air'?'#8ec4ed':'#dfb27a'):labelColors[key];
+      const unit=Boolean(equipmentTitles[key]),nameText=unit?equipmentTitles[key]:zoneNames[key],color=unit?(['liquid','rack'].includes(key)?'#76d7c6':['air','fan'].includes(key)?'#8ec4ed':key==='network'?'#c2a4ed':'#dfb27a'):labelColors[key];
       const label=document.createElement('button');label.type='button';label.dataset.zone=key;label.setAttribute('aria-label','查看'+nameText);
       label.style.cssText='position:absolute;z-index:1;transform:translate(-50%,-100%);display:none;align-items:center;gap:5px;background:rgba(17,34,47,.94);border:1px solid rgba(170,206,210,.39);border-radius:4px;padding:3px 6px;color:#e2eded;white-space:nowrap;font:500 10px/1.2 system-ui,"PingFang SC",sans-serif;letter-spacing:.035em;cursor:pointer;box-shadow:0 2px 6px #0a192336;';
       const dot=document.createElement('i');dot.style.cssText='width:5px;height:5px;border-radius:50%;display:block;background:'+color;
@@ -812,11 +977,16 @@
       const h=model.plan.dims[openIndex],cutaway=mode==='cutaway',used=[];
       for(const key of labelKeys){
         const lab=labels[key],unit=Boolean(equipmentTitles[key]),anchor=unit?h.points[key]:model.anchors[key];
-        if(!anchor||unit!==cutaway||(unit&&cam.cut<.48)){lab.style.display='none';continue;}
-        const p=projectPoint(anchor,cam),active=key===selected,short=cam.width<480;
+        const baseKey=focusKey?.startsWith('rack:')?'rack':focusKey,focused=unit&&baseKey===key;
+        const filtered=unit&&((channelMembers[circuit]&&!channelMembers[circuit].includes(key))||(!channelMembers[circuit]&&advanced.has(key)&&!focused));
+        if(!anchor||unit!==cutaway||(unit&&cam.cut<.48)||(filtered&&!focused)||(focusKey&&!focused&&unit)){lab.style.display='none';continue;}
+        const p=projectPoint(focused?aim.slice(0,3):anchor,cam),active=focused||key===selected,short=cam.width<480;
         if((!unit&&short&&key!==(selected||'it'))||p[0]<6||p[0]>cam.width-6||p[1]<15||p[1]>cam.height-12){lab.style.display='none';continue;}
         const arch=project.config?.architecture;
-        const name=key==='hvdc'?'集中式 HVDC':key==='transformer'?(arch==='SST 800V 直流'?'辅助变压器':'变压器'):key==='air'&&project.config?.cooling==='冷板液冷'?'辅助风冷':
+        const ac=project.config?.architecture==='交流 UPS'||!project.config?.architecture;
+        const name=key==='rowdist'?(ac?'交流列头柜':'直流列端配电柜'):key==='pdu'?(ac?'A/B 分支 · PDU':'直流母线分支'):
+          key==='psu'?(ac?'柜端 PSU':'柜端电源转换'):key==='network'?'ToR 交换机':key==='fan'?'EC 风扇':
+          key==='hvdc'?'集中式 HVDC':key==='transformer'?(arch==='SST 800V 直流'?'辅助变压器':'变压器'):key==='air'&&project.config?.cooling==='冷板液冷'?'辅助风冷':
           key==='rack'&&h.rackType?rackTypes[h.rackType][0]+' 机柜':
           unit?equipmentTitles[key]:key==='it'?'数据机房 ›':active?'查看设备 ›':zoneNames[key];
         if(lab.children[1].textContent!==name)lab.children[1].textContent=name;
@@ -830,7 +1000,7 @@
         used.push(pos);lab.style.display='flex';lab.style.left=pos.x+'px';lab.style.top=pos.y+'px';
         const lx=p[0]-pos.x,ly=p[1]-pos.y,stem=lab.children[2];
         stem.style.height=Math.hypot(lx,ly)+'px';stem.style.transform='rotate('+(-Math.atan2(lx,ly))+'rad)';
-        lab.style.borderColor=active?labelColors[key]:'rgba(170,206,210,.39)';
+        lab.style.borderColor=active?(labelColors[key]||'#97e3d1'):'rgba(170,206,210,.39)';
         lab.setAttribute('aria-label',key==='it'?'打开机房剖视':'查看'+name.replace(' ›',''));lab.setAttribute('aria-pressed',String(active));
       }
       info();
@@ -844,7 +1014,7 @@
         hallMenu.replaceChildren(...model.plan.dims.map((h,i)=>{const o=document.createElement('option');o.value=String(i);o.textContent='第 '+format(h.index+1)+' 间';return o;}));
         if(mode==='cutaway'||selected)focus(selected);
       }
-      dirty=false;
+      dirty=false;if(restorePending){const saved=restorePending;restorePending=null;restoreViewState(saved);}
     }
     const approach=(value,target,t)=>Math.abs(target-value)<.00037?target:value+(target-value)*t;
     function draw(now){
@@ -860,7 +1030,15 @@
         if(Math.abs(target-cuts[i])>.0001)cutting=true;
       }
       cut=cuts[openIndex];
-      yaw=approach(yaw,wanted.yaw,t);pitch=approach(pitch,wanted.pitch,t);zoom=approach(zoom,wanted.zoom,t);fx=approach(fx,wanted.fx,t);fy=approach(fy,wanted.fy,t);
+      let arrived=null;
+      if(travel){
+        const progress=travel.ms?clamp((now-travel.at)/travel.ms,0,1):1,blend=eased(progress);
+        const move=k=>travel.start[k]+(travel.dest[k]-travel.start[k])*blend;
+        yaw=move('yaw');pitch=move('pitch');zoom=move('zoom');fx=move('fx');fy=move('fy');fz=move('fz');
+        if(progress>=1){({yaw,pitch,zoom,fx,fy,fz}=travel.dest);arrived=travel;travel=null;}
+      }else{
+        yaw=approach(yaw,wanted.yaw,t);pitch=approach(pitch,wanted.pitch,t);zoom=approach(zoom,wanted.zoom,t);fx=approach(fx,wanted.fx,t);fy=approach(fy,wanted.fy,t);fz=approach(fz,wanted.fz,t);
+      }
       for(let i=0;i<3;i++)highlight[i]=approach(highlight[i],selected===zones[i+1]?1:0,reduce?1:t);
       const raw=Number(project.config?.load??80),load=Number.isFinite(raw)?clamp(raw/100,0,1):0;
       const moving=playing&&!reduce&&load>0;if(moving)activeTime=(activeTime+dt*(.23+.94*load))%86400;
@@ -871,19 +1049,19 @@
       }
       const ca=Math.cos(yaw),sa=Math.sin(yaw),sp=Math.sin(pitch),cp=Math.cos(pitch);
       const scale=Math.min(width/190,height/Math.max(107,15+165*sp))*zoom;
-      cam={width,height,cx:width*.5-(fx*ca-fy*sa)*scale,cy:height*.535-(fx*sa+fy*ca)*sp*scale,scale,ca,sa,sp,cp,cut,time:activeTime,load,highlight,cuts,circuit:circuitIds[circuit]};
+      cam={width,height,cx:width*.5-(fx*ca-fy*sa)*scale,cy:height*.535-((fx*sa+fy*ca)*sp-fz*cp)*scale,scale,ca,sa,sp,cp,cut,time:activeTime,load,highlight,cuts,aim,circuit:circuitIds[circuit]};
       const bgKey=[width,height,scale.toFixed(4),yaw.toFixed(4),pitch.toFixed(4),cam.cx.toFixed(2),cam.cy.toFixed(2)].join(',');
       if(bgKey!==groundKey){drawGround(ground,cam);groundKey=bgKey;}
       renderer.draw(cam,selected);
-      positionLabels();
-      const transit=cutting||yaw!==wanted.yaw||pitch!==wanted.pitch||zoom!==wanted.zoom||fx!==wanted.fx||fy!==wanted.fy||highlight.some((v,i)=>v!==(zones[i+1]===selected?1:0));
+      positionLabels();if(arrived)arrived.resolve(true);
+      const transit=Boolean(travel)||cutting||yaw!==wanted.yaw||pitch!==wanted.pitch||zoom!==wanted.zoom||fx!==wanted.fx||fy!==wanted.fy||fz!==wanted.fz||highlight.some((v,i)=>v!==(zones[i+1]===selected?1:0));
       if(transit||moving){
         const fps=cpu?(transit?19:10):(transit?60:30),delay=1000/fps-(performance.now()-now);
         if(delay>15)delayed=setTimeout(()=>{delayed=0;requestDraw();},delay-5);else requestDraw();
       }else prev=0;
     }
     function requestDraw(){if(!disposed&&!scheduled&&!document.hidden&&inViewport){if(delayed){clearTimeout(delayed);delayed=0;}scheduled=requestAnimationFrame(draw);}}
-    function zoomBy(factor){if(Number.isFinite(factor)&&factor>0){wanted.zoom=clamp(wanted.zoom*factor,.52,14);requestDraw();}}
+    function zoomBy(factor){if(Number.isFinite(factor)&&factor>0){cancelTravel();wanted.zoom=clamp(wanted.zoom*factor,.52,24);requestDraw();}}
     function reset(){focus(null);requestDraw();}
     const pointers=new Map();let gesture=null,dragged=false;
     function startGesture(){
@@ -892,14 +1070,14 @@
     }
     wrapper.addEventListener('pointerdown',e=>{
       if(e.target.closest('button,select')||e.button!==0)return;
-      if(!pointers.size)dragged=false;else dragged=true;
+      cancelTravel();if(!pointers.size)dragged=false;else dragged=true;
       pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});wrapper.setPointerCapture(e.pointerId);
       wrapper.style.cursor='grabbing';startGesture();
     });
     wrapper.addEventListener('pointermove',e=>{
       if(!pointers.has(e.pointerId)||!gesture)return;
       pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});const pts=Array.from(pointers.values());
-      if(pts[1]&&gesture.span>0){wanted.zoom=clamp(gesture.zoom*Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y)/gesture.span,.52,14);requestDraw();return;}
+      if(pts[1]&&gesture.span>0){wanted.zoom=clamp(gesture.zoom*Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y)/gesture.span,.52,24);requestDraw();return;}
       const dx=e.clientX-gesture.x,dy=e.clientY-gesture.y;
       if(Math.abs(dx)+Math.abs(dy)>3)dragged=true;
       if(dragged){wanted.yaw=gesture.yaw+dx*.008;wanted.pitch=clamp(gesture.pitch+dy*.006,.24,1.18);requestDraw();}
@@ -924,18 +1102,19 @@
     const observer=typeof ResizeObserver==='function'?new ResizeObserver(requestDraw):null;
     if(observer)observer.observe(wrapper);else window.addEventListener('resize',requestDraw);
     const intersection=typeof IntersectionObserver==='function'?new IntersectionObserver(entries=>{
-      inViewport=entries[0].isIntersecting;if(inViewport){prev=0;requestDraw();}
+      inViewport=entries[0].isIntersecting;if(inViewport){prev=0;requestDraw();}else cancelTravel();
     }):null;intersection?.observe(wrapper);
     function motionChanged(){if(media.matches)playing=false;prev=0;requestDraw();}
-    function visibilityChanged(){prev=0;if(!document.hidden)requestDraw();}
+    function visibilityChanged(){prev=0;if(!document.hidden)requestDraw();else cancelTravel();}
     media.addEventListener?.('change',motionChanged);document.addEventListener('visibilitychange',visibilityChanged);
     requestDraw();
     return {update(data={}){project=data.project||{};metrics=data.metrics||{};dirty=true;requestDraw();},
       setMode(value){if((value==='cutaway'||value==='campus')&&mode!==value){mode=value;cutTarget=value==='cutaway'?1:0;focus(selected);requestDraw();}},
       setPlaying(value){const next=Boolean(value);if(next!==playing){playing=next;prev=0;requestDraw();}},
       setCircuit(key){if(Object.hasOwn(circuitIds,key)&&key!==circuit){circuit=key;requestDraw();}},
+      focusEquipment,getViewState,restoreViewState,
       setSelected(key){select(key,false);},zoomBy,reset,resize:requestDraw,
-      destroy(){disposed=true;clearTimeout(delayed);intersection?.disconnect();media.removeEventListener?.('change',motionChanged);document.removeEventListener('visibilitychange',visibilityChanged);if(observer)observer.disconnect();else window.removeEventListener('resize',requestDraw);cancelAnimationFrame(scheduled);renderer.dispose();wrapper.remove();}};
+      destroy(){cancelTravel();disposed=true;clearTimeout(delayed);intersection?.disconnect();media.removeEventListener?.('change',motionChanged);document.removeEventListener('visibilitychange',visibilityChanged);if(observer)observer.disconnect();else window.removeEventListener('resize',requestDraw);cancelAnimationFrame(scheduled);renderer.dispose();wrapper.remove();}};
   }
   window.GridCampus=Object.freeze({mount});
 })();

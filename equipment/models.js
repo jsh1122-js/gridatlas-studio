@@ -1,5 +1,6 @@
 import * as T from './vendor/three.module.min.js';
 import {buildPower} from './power-models.js';
+import {addRackDetails,buildService,serviceGeometry,ringShape,bladeShape} from './service-models.js';
 
 import {RoundedBoxGeometry} from './vendor/RoundedBoxGeometry.js';
 const cube=new T.BoxGeometry(1,1,1);
@@ -90,8 +91,11 @@ export function buildModel(s) {
   function fan(k,x,y,z,r){
     cyl(k,x,y,z,r*2.14,.11,'silver',[Math.PI/2,0,0]);cyl(k,x,y,z+.07,r*1.99,.10,'black',[Math.PI/2,0,0]);
     const rotor=new T.Group();rotor.position.set(x,y,z+.14);groups(k).add(rotor);rotors.push(rotor);
-    const blade=new T.BoxGeometry(r*.24,r*.78,.05);
-    for(let i=0;i<7;i++){const a=i*2*Math.PI/7;const vane=new T.Mesh(blade,paletteMats.steel);vane.position.set(Math.sin(a)*r*.52,Math.cos(a)*r*.52,0);vane.rotation.z=-a-.39;vane.userData.key=k;rotor.add(vane);picks.push(vane);}
+    for(let i=0;i<7;i++){
+      const vane=new T.Mesh(bladeShape,paletteMats.steel);
+      vane.scale.setScalar(r);vane.rotation.z=i*2*Math.PI/7;vane.userData.key=k;rotor.add(vane);picks.push(vane);
+    }
+    for(const factor of [.82,1.38,1.97])item(k,ringShape,'trim',[x,y,z+.24],[r*factor,r*factor,r*factor]);
     cyl(k,x,y,z+.18,r*.42,.10,'dark',[Math.PI/2,0,0]);
   }
   function housing(k,x,y,z,w,h,d){
@@ -103,6 +107,7 @@ export function buildModel(s) {
   const gb=s.profile==='gb200'||s.profile==='gb300',ultra=s.profile==='gb300',nodes=gb?18:s.servers,gpus=gb?4:s.cards;
   const isRack=s.category==='rack';
   if(isRack && s.level==='rack') {
+    addRackDetails(s,{groups,box,cyl,rod,pipe,sign});
     groups('frame');groups('fabric',[.53,0,-.30]);groups('power',[-.34,.23,0]);groups('cooling',[.45,0,-.25]);
     housing('frame',0,2.03,0,1.58,4.04,1.76);
     box('frame',-.78,2.03,-.10,.055,3.82,1.43,'panel');box('frame',0,.13,0,1.59,.14,1.81,'black');
@@ -198,6 +203,8 @@ export function buildModel(s) {
       for(let j=0;j<12;j++)box('thermal',-.55+j*.10,.702,.36,.026,.007,.24,'dark');
       marking('thermal','COLD PLATE  /  GPU '+String(s.gpu).padStart(2,'0'),0,.703,0,1.22,'#493529');for(let j=0;j<2;j++){const x=j?.61:-.61;pipe('thermal',[[x,.72,-.43],[x,.93,-.56],[x,.95,-1.03]],.075,j?'hot':'blue');cyl('thermal',x,.74,-.44,.18,.10,'brass');}}
     else {box('thermal',0,.64,0,1.73,.11,1.43,'copper');for(let j=0;j<26;j++)box('thermal',-.75+j*.06,.82,0,.029,.32,1.35,'silver');}
+  } else if(['rowdist','pdu','psu','fan','network'].includes(s.category)){
+    buildService(s,{groups,box,cyl,rod,pipe,housing,sign,grip,item,paletteMats,rotors,picks});
   } else if(['transformer','switchgear','sst','hvdc'].includes(s.category)){
     buildPower(s,{groups,box,cyl,rod,pipe,housing,sign,grip,screw});
   } else if(s.category==='ups'){
@@ -257,7 +264,7 @@ export function buildModel(s) {
       beads.instanceMatrix.needsUpdate=true;
     }
   }
-  const shared=new Set([cube,bevel,cylinder,sphere]);
+  const shared=new Set([cube,bevel,cylinder,sphere,...serviceGeometry]);
   function dispose(){const geometries=new Set();root.traverse(o=>{if(o.geometry&&!shared.has(o.geometry))geometries.add(o.geometry);if(o.isInstancedMesh)o.dispose();});geometries.forEach(g=>g.dispose());materials.forEach(m=>{if(m.map && m.map!==circuit)m.map.dispose();m.dispose();});}
   return {root,parts,picks,select,tick,dispose,center,size,hasFlow:streams.length>0||rotors.length>0};
 }
