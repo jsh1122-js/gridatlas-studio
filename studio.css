@@ -1,0 +1,211 @@
+/* The shell, the GIS workbench and the design forms share the twin studio's palette. */
+@media screen {
+  .studio-theme {
+    color-scheme:dark;
+    --ink:var(--tw-text);--muted:var(--tw-muted);--line:var(--tw-line);--blue:var(--tw-mint);--bg:var(--tw-bg);
+    --st-surface:#111f30;--st-raised:#17293a;--st-well:#0c1927;--st-border:#304457;--st-secondary:#bdd0df;
+    --st-gold:#edbd79;--st-soft-mint:#173c3d;--st-ring:#80ead2;--st-error:#ffad9e;
+  }
+  .studio-theme ::selection {background:#366c67;color:#f0fffa}
+  .studio-theme :is(button,a,input,select,summary):focus-visible {outline:2px solid var(--st-ring);outline-offset:3px}
+  .studio-theme .skip {background:#17353a;border:1px solid var(--st-ring);color:#e8fff9;border-radius:6px}
+  .studio-theme .site-header {background:linear-gradient(110deg,#101e2c,#0d1926 67%);border-color:#2b3d4b}
+  .studio-theme .shell>.page {scroll-margin-block-start:160px}
+  .studio-theme .head-inner {display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:clamp(13px,1.8vw,28px);height:67px;align-items:center}
+  .studio-theme .brand {gap:8px}
+  .studio-theme .brand img,.studio-theme .site-footer img {filter:hue-rotate(-65deg) saturate(.8) brightness(1.13)}
+  .studio-theme .brand b {padding-left:9px;border-color:#385060;color:#afc5d5}
+  .studio-theme .top-nav {display:flex;align-self:stretch;justify-content:space-between;align-items:center;min-width:0;gap:clamp(2px,.38vw,7px)}
+  .studio-theme .top-nav a {font-size:clamp(.77rem,.89vw,.87rem);font-weight:550;line-height:1.3;min-height:38px;padding:7px clamp(3px,.48vw,8px);border-radius:7px;gap:5px;color:#b0c0ce;transition:background .16s,color .16s}
+  .studio-theme .top-nav a i {color:#91a9ba}
+  .studio-theme .top-nav svg {width:15px;height:15px}
+  .studio-theme .top-nav a:hover {background:#1c3040;color:#eef8fb}
+  .studio-theme .top-nav a[aria-current=page] {box-shadow:inset 0 0 0 1px #365653;color:#a1f1d9;background:#1a373b;font-weight:650}
+  .studio-theme .top-nav a[aria-current=page] i {color:#8be5cb}
+  .studio-theme .top-nav a[aria-current=page]::after {display:none}
+  .studio-theme .help-btn {margin:0;padding:8px 2px 8px 9px;border-left:1px solid #334451;color:#b2c4d3;min-height:32px}
+  .studio-theme .help-btn svg {width:16px;height:16px}
+  .studio-theme .help-btn:hover,.studio-theme .site-footer button:hover {color:#9aefd7}
+  .studio-theme .shell:has(.frame-page:not([hidden])) {padding-top:14px}
+  .studio-theme .frame-page iframe {background:var(--st-well);border-color:var(--st-border)}
+  .studio-theme .site-footer {border-color:#2a3d4c}
+
+  /* Project and map controls */
+  .studio-theme :is(#overview,#design,#library) {font-variant-numeric:tabular-nums}
+  .studio-theme :is(.mast h1,.gd-workbench h1) {font-size:clamp(1.65rem,2.48vw,2.45rem);line-height:1.38;letter-spacing:-.045em;font-weight:700;color:var(--ink)}
+  .studio-theme :is(.mast,.gd-heading) {margin-bottom:20px}
+  .studio-theme :is(.mast p,.gd-heading p) {font-size:.84rem;line-height:1.65;color:var(--muted);margin-top:3px}
+  .studio-theme :is(.btn,.small-btn,.design-jump,.station-dialog button,.icon-btn,.option-row,.gd-tabs button) {transition:background-color .16s,border-color .16s,color .16s,box-shadow .16s}
+  .studio-theme :is(.btn,.small-btn,.station-dialog button) {color:#d9e8f4;background:var(--st-raised);border:1px solid #3a5061;box-shadow:none}
+  .studio-theme :is(.btn,.small-btn,.station-dialog button):hover {background:#233b4c;border-color:#587488;color:#f2fcff}
+  .studio-theme .btn.primary {color:#0c302c;background:#85e3c9;border-color:#85e3c9}
+  .studio-theme .btn.primary:hover {background:#9debd4;border-color:#9debd4}
+  .studio-theme .btn svg {width:16px;height:16px}
+  .studio-theme :is(.card,.library-item,.metric-card,.gd-card,.gd-metrics) {background:var(--st-surface);border:1px solid var(--line);border-radius:13px;box-shadow:0 6px 16px #06111b22}
+  .studio-theme :is(.card-title,.gd-cardhead,.metric-head) {color:var(--ink)}
+  .studio-theme .card-title {border-color:var(--line);min-height:55px}
+  .studio-theme .section-name h2,.studio-theme .metric-head h2,.studio-theme .gd-workbench h2 {font-size:1.05rem;font-weight:670;line-height:1.4;letter-spacing:-.025em}
+  .studio-theme :is(.tile-icon,.loc-row i,.world-link,.geo-coordinate-action,.station-focus) {color:var(--tw-mint)}
+  .studio-theme .world-link,.studio-theme .geo-coordinate-action {font-weight:600}
+  .studio-theme :is(.world-link,.geo-coordinate-action,.station-focus):hover {color:#a8f3dc;text-decoration:underline;text-underline-offset:3px}
+  .studio-theme .work-grid {gap:16px}
+  .studio-theme .geo-card {overflow:visible}
+  .studio-theme .map-frame {border-block:1px solid #213340}
+  .studio-theme .map-footer {background:#0e1c2a;border-radius:0 0 12px 12px;color:var(--muted)}
+  .studio-theme .coord-chip button,.studio-theme .map-controls button {background:#101f2eec;color:#e5f1f9;border-color:#5874858c}
+  .studio-theme .coord-chip button:hover,.studio-theme .map-controls button:hover {background:#284654;border-color:#789b9e}
+  .studio-theme .popover {background:#172a3b;border:1px solid #435d6e;box-shadow:0 10px 28px #02080fb3;color:#e4f0f7;padding:10px}
+  .studio-theme .popover strong {font-size:.77rem;color:#a3bdc9;padding-left:4px}
+  .studio-theme .popover label {border-radius:5px;padding-inline:3px}
+  .studio-theme .popover label:hover {background:#233b48}
+  .studio-theme .popover input {accent-color:#75d9be}
+  .studio-theme .station-area {border:1px solid #304858}
+  .studio-theme .param-divider {background:var(--line)}
+  .studio-theme .param-head span,.studio-theme .metric-head span,.studio-theme .loc-row {color:var(--muted)}
+  .studio-theme .icon-btn {color:#a7c0cf}
+  .studio-theme .icon-btn:hover {color:#b1f4df;background:#223847}
+  .studio-theme .save-state {color:#95d9b9}
+  .studio-theme .save-state>i {background:#6dd6a8;box-shadow:0 0 0 3px #26473f}
+  .studio-theme .save-state.failed {color:#f5c397}
+  .studio-theme .save-state.failed>i {background:#ebb47a;box-shadow:0 0 0 3px #453b32}
+  .studio-theme .quick-fields label,.studio-theme .dlg-field,.studio-theme .gd-field {color:var(--st-secondary)}
+  .studio-theme :is(.num-wrap,.gd-input,.gd-field select,.radius-label select,.dlg-field input) {background:var(--st-well);color:var(--ink);border:1px solid var(--st-border);border-radius:7px;transition:border-color .16s,background-color .16s}
+  .studio-theme :is(.num-wrap,.gd-input,.gd-field select,.radius-label select,.dlg-field input):hover {border-color:#526b7b}
+  .studio-theme :is(.num-wrap,.gd-input):focus-within {outline:2px solid #62bcaa;outline-offset:1px;border-color:#8ad8c6}
+  .studio-theme :is(.num-wrap,.gd-input) input:focus-visible {outline:0}
+  .studio-theme :is(.num-wrap,.gd-input) input {color:#eff8fa;caret-color:var(--tw-mint)}
+  .studio-theme :is(.num-wrap span,.gd-input>span,.gd-field select,.radius-label select) {color:#bdd0dd}
+  .studio-theme .dlg-field input::placeholder {color:#849aab}
+  .studio-theme :is(.form-error,.gd-error) {color:var(--st-error)}
+  .studio-theme .gd-input:has([aria-invalid=true]) {border-color:#e69280}
+  .studio-theme .design-jump {background:var(--st-soft-mint);color:#a2ecd7;border:1px solid #3e6f67;min-height:38px}
+  .studio-theme .design-jump:hover {background:#21504d;color:#c1ffe9}
+  .studio-theme :is(.nearby-card,.metrics) {margin-top:19px}
+  .studio-theme .nearby-content th {background:#192b3b;color:#b9cfdb;border-top:1px solid var(--line);font-weight:580}
+  .studio-theme .nearby-content :is(td,th) {border-color:var(--line)}
+  .studio-theme .nearby-content tbody tr {transition:background-color .14s}
+  .studio-theme .nearby-content tbody tr:hover {background:#162b37}
+  .studio-theme .nearby-content td:first-child span {background:#1e3e42;color:#9ce8d0}
+  .studio-theme .nearby-content td small,.studio-theme .nearby-content .near-filter-count {color:#9eb3c3}
+  .studio-theme .nearby-content td a,.studio-theme .nearby-content td:last-child a {color:#b1cccc}
+  .studio-theme .near-distance {color:#efc78a}
+  .studio-theme .station-focus {min-height:30px}
+  .studio-theme .metric-label {color:var(--st-secondary)}
+  /* These two colors supersede the original per-metric inline swatches. */
+  .studio-theme .metric-icon {color:#8de3cb!important;background:#1a393c!important}
+  .studio-theme .metric-card:nth-child(2) .metric-icon {color:#a8cceb!important;background:#24364c!important}
+  .studio-theme .metric-card:nth-child(4) .metric-icon {color:#edbd79!important;background:#3b332a!important}
+  .studio-theme .metric-value strong {color:var(--ink)}
+  .studio-theme :is(.metric-value span,.metric-desc) {color:var(--muted)}
+
+  /* Design workbench */
+  .studio-theme .gd-workbench {--gd-ink:var(--ink);--gd-muted:var(--muted);--gd-soft:var(--st-well);--gd-rule:var(--line);--gd-accent:var(--tw-mint);color:var(--ink);font-family:var(--font)}
+  .studio-theme .gd-location {color:#b5cad6;background:#122735;border:1px solid #314a56;border-radius:7px;padding:6px 10px}
+  .studio-theme .gd-metric b,.studio-theme .gd-energy-total>span {font-weight:650}
+  .studio-theme .gd-metric:first-child b,.studio-theme .gd-energy-total>span {color:var(--tw-mint)}
+  .studio-theme .gd-metric:last-child b {color:#edc48b}
+  .studio-theme .gd-note {color:#a0b8c8}
+  .studio-theme .gd-tabs {background:var(--st-well);border:1px solid #2d4353;padding:2px}
+  .studio-theme .gd-tabs button {min-height:28px;padding:4px 10px;color:#a6bacc}
+  .studio-theme .gd-tabs button:hover {color:#e5f3f8;background:#1a2f3e}
+  .studio-theme .gd-tabs button[aria-pressed=true] {color:#96ead0;background:#20413f;box-shadow:inset 0 0 0 1px #3f5c58}
+  .studio-theme .gd-blueprint {background-color:#102432;background-image:radial-gradient(#a3cbc82d .9px,transparent .9px),linear-gradient(120deg,#1e3944,#102331 75%);background-size:13px 13px,100% 100%;border:1px solid #33515f}
+  .studio-theme .gd-diagram-heading>:last-child {color:#aabdc9}
+  .studio-theme .gd-meter {background:#364858;height:7px}
+  .studio-theme :is(.gd-meter i,.gd-legend i) {background:#70d9bb}
+  .studio-theme .gd-meter i {transition:width .23s ease-out}
+  .studio-theme .gd-legend span+span i {background:#526a7b}
+  .studio-theme .gd-method p {color:#b4c5d2;line-height:1.85}
+
+  /* Saved projects and dialogs */
+  .studio-theme .library-item {position:relative;background:radial-gradient(ellipse at 100% 0,#1d3540,transparent 65%),var(--st-surface);transition:border-color .16s,box-shadow .16s}
+  .studio-theme .library-item:has(.lib-head span:not(:empty)) {border-color:#375c5b}
+  .studio-theme .library-item:focus-within,.studio-theme .library-item:hover {border-color:#537371;box-shadow:0 8px 24px #030b1247}
+  .studio-theme .lib-head>i {display:grid;place-items:center;width:32px;height:32px;background:#1a383d;border:1px solid #345854;border-radius:7px;color:#90e4cd}
+  .studio-theme .lib-head span:not(:empty) {padding:3px 7px;border:1px solid #335b55;border-radius:5px;background:#1c3738;color:#a1dcc6;font-size:.72rem}
+  .studio-theme .library-item h2 {color:#edf6fa;font-weight:660}
+  .studio-theme .library-item p+p {font:.76rem/1.6 var(--mono);color:#9db3c3}
+  .studio-theme .lib-metrics {color:#d1e4e8}
+  .studio-theme .library-item .small-btn {color:#a5ebd6}
+  .studio-theme :is(#dialog,dialog.station-dialog) {color:var(--ink);background:linear-gradient(145deg,#192d3c,#122231 70%);border:1px solid #435968;box-shadow:0 24px 90px #02080ed9,0 1px 0 #72909a24 inset;max-height:90dvh;overflow:auto}
+  .studio-theme dialog::backdrop {background:#07121dc4;backdrop-filter:blur(4px)}
+  .studio-theme .dlg-head {padding-bottom:12px;margin-bottom:12px;border-bottom:1px solid #334654}
+  .studio-theme :is(.dialog-note,.help-text,.station-caption,.station-legend) {color:var(--st-secondary)}
+  .studio-theme .help-text b {color:#e9f3f8}
+  .studio-theme :is(.help-text a,.station-actions a) {color:#96e4ca;text-underline-offset:3px}
+  .studio-theme .option-row {background:#142b39;border-color:#344e5b;color:var(--ink)}
+  .studio-theme .option-row:hover {border-color:#547c79;background:#1e3c46}
+  .studio-theme .option-row>i {color:#8fe5cd}
+  .studio-theme .station-actions {border-top:1px solid #344957;padding-top:10px}
+  .studio-theme #toast {border:1px solid #526e73;background:#1c363f;color:#eaf9f7;box-shadow:0 6px 24px #02090f99}
+}
+@media screen and (min-width:1051px) and (max-width:1230px) {
+  .studio-theme .head-inner {gap:9px}
+  .studio-theme .brand b,.studio-theme .help-btn span {display:none}
+}
+@media screen and (max-width:1050px) {
+  .studio-theme .head-inner {height:auto;grid-template-columns:1fr auto;gap:0}
+  .studio-theme .brand {grid-area:1/1;min-height:46px}
+  .studio-theme .brand img {width:29px;height:29px}
+  .studio-theme .brand b {display:inline}
+  .studio-theme .help-btn {grid-area:1/2;padding-left:10px;min-height:28px}
+  .studio-theme .top-nav {grid-area:2/1/3/-1;gap:4px;min-height:40px;padding:0 0 5px;overflow:visible}
+  .studio-theme .top-nav a {min-height:32px;font-size:.81rem;padding-inline:5px}
+}
+@media screen and (max-width:800px) {
+  .studio-theme .top-nav {display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:3px 5px;padding-bottom:6px}
+  .studio-theme .top-nav a {justify-content:center;padding:5px 1px;min-height:31px;white-space:nowrap}
+  .studio-theme .top-nav a i {display:none}
+}
+@media screen and (max-width:700px) {
+  .studio-theme .head-inner,.studio-theme .site-footer {padding-inline:14px}
+  .studio-theme .shell:has(.frame-page:not([hidden])) {padding-top:0}
+  .studio-theme :is(.mast,.gd-heading) {margin-bottom:15px}
+  .studio-theme .work-grid {gap:12px;grid-template-columns:minmax(0,1fr)}
+  .studio-theme .card-title {min-height:49px}
+  .studio-theme .radius-label {gap:5px}
+  .studio-theme .nearby-card .card-title {align-items:center}
+  .studio-theme .nearby-content {padding:12px}
+  .studio-theme .gd-location {font-size:.72rem}
+}
+@media screen and (max-width:560px) {
+  .studio-theme .brand {min-height:44px}
+  .studio-theme .top-nav {gap:2px 3px}
+  .studio-theme .top-nav a {font-size:.76rem}
+  .studio-theme .mast {align-items:flex-start}
+  .studio-theme .mast-actions {gap:6px;flex-wrap:wrap}
+  .studio-theme .quick-fields {gap:10px}
+  .studio-theme .nearby-content table,.studio-theme .nearby-content tbody {display:block;width:100%}
+  .studio-theme .nearby-content thead {position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+  .studio-theme .nearby-content tbody tr {display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:2px 8px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}
+  .studio-theme .nearby-content td {display:block;border:0;padding:0;font-size:.81rem;min-width:0}
+  .studio-theme .nearby-content td:first-child {grid-column:1;grid-row:1/3}
+  .studio-theme .nearby-content td:nth-child(2) {grid-area:1/2;overflow-wrap:anywhere}
+  .studio-theme .nearby-content td:nth-child(3) {grid-area:2/2;color:#b9cbd7;font-size:.74rem}
+  .studio-theme .nearby-content td:nth-child(4) {grid-area:1/3;justify-self:end;color:#eec78f}
+  .studio-theme .nearby-content td:nth-child(5) {grid-area:2/3;justify-self:end}
+  .studio-theme .nearby-content td small {font-size:.67rem}
+  .studio-theme .nearby-content td:last-child a {font-size:.72rem}
+  .studio-theme .station-focus {font-size:.75rem;min-height:27px}
+  .studio-theme .nearby-filter-row {gap:8px}
+  .studio-theme .map-head-tools {gap:4px}
+  .studio-theme .map-head-tools .world-link {font-size:.74rem}
+  .studio-theme .metric-card {padding:13px}
+  .studio-theme .metric-card .metric-icon {width:23px;height:23px}
+  .studio-theme .station-dialog .station-actions {gap:6px}
+  .studio-theme .station-dialog .station-actions a {margin-left:0}
+}
+@media screen and (max-width:335px) {
+  .studio-theme .top-nav {grid-template-columns:repeat(3,minmax(0,1fr))}
+  .studio-theme .map-head-tools .world-link i,.studio-theme .map-head-tools .chev {display:none}
+}
+@media screen and (prefers-reduced-motion:no-preference) {
+  .studio-theme :is(#overview,#design,#library):not([hidden]) {animation:studio-workbench-in .21s ease-out}
+  @keyframes studio-workbench-in {from {opacity:.88;transform:translateY(3px)} to {opacity:1;transform:translateY(0)}}
+}
+@media (prefers-reduced-motion:reduce) {
+  .studio-theme :is(.top-nav a,.btn,.small-btn,.station-dialog button,.icon-btn,.option-row,.design-jump,.gd-tabs button,.gd-meter i,.num-wrap,.gd-input,.gd-field select,.radius-label select,.dlg-field input,.library-item,.nearby-content tr) {transition:none;scroll-behavior:auto}
+}
+@media print {
+  html.studio-theme,html.studio-theme body {background:white;color:#172942;color-scheme:light}
+}

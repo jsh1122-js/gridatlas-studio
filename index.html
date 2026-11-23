@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="zh-CN" class="studio-theme twin-theme">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0b1521">
+  <meta name="description" content="在基础设施地图上选择候选场址，建立和比较智算中心的供电、能耗与成本方案。">
+  <title>算电图研 GridAtlas · 算电选址工作台</title>
+  <link rel="icon" href="brand.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="app.css">
+  <link rel="stylesheet" href="map.css">
+  <link rel="stylesheet" href="station-view.css">
+  <link rel="stylesheet" href="design.css">
+  <link rel="stylesheet" href="twin.css">
+  <link rel="stylesheet" href="studio.css"><link rel="stylesheet" href="equipment/equipment.css"><link rel="stylesheet" href="equipment/fabric.css">
+  <script defer src="map-data.js"></script>
+  <script defer src="map.js"></script>
+  <script defer src="design.js"></script>
+  <script defer src="aidc/finance.js"></script>
+  <script defer src="equipment/study.js"></script>
+  <script defer src="io.js"></script>
+  <script defer src="station-view.js"></script>
+  <script defer src="nearby-data.js"></script>
+  <script defer src="nearby-ui.js"></script>
+  <script defer src="twin-campus.js"></script>
+  <script defer src="twin-territory.js"></script>
+  <script defer src="twin.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <a href="#main" class="skip">跳到主要内容</a>
+  <header class="site-header">
+    <div class="head-inner">
+      <a class="brand" href="#twin" aria-label="算电图研 数字孪生"><img src="brand.svg" width="38" height="38" alt=""><span>算电图研</span><b lang="en">GridAtlas</b></a>
+      <nav aria-label="工作区导航" class="top-nav">
+        <a href="#twin" data-route="twin"><i data-i="cube"></i>数字孪生</a><a href="#equipment" data-route="equipment"><i data-i="layers"></i>设备剖解</a><a href="#overview" data-route="overview"><i data-i="overview"></i>选址测算</a><a href="#world" data-route="world"><i data-i="globe"></i>全球地图</a><a href="#design" data-route="design"><i data-i="network"></i>方案设计</a><a href="#aidc" data-route="aidc"><i data-i="server"></i>AIDC 数据台</a><a href="#industry" data-route="industry"><i data-i="energy"></i>行业数据</a><a href="#energy" data-route="energy"><i data-i="bolt"></i>电价资料</a><a href="#library" data-route="library"><i data-i="library"></i>方案库</a>
+      </nav>
+      <button class="help-btn" type="button" data-action="help" aria-label="使用说明"><i data-i="book"></i><span>使用说明</span></button>
+    </div>
+  </header>
+  <main id="main" class="shell" tabindex="-1">
+    <section id="twin" class="page twin-page" aria-labelledby="tw-title" hidden>
+      <div class="tw-heading">
+        <div><h1 id="tw-title">算电数字孪生</h1><p class="tw-project-line"><i data-i="pin"></i><span id="tw-place"></span><span class="tw-separator">/</span><span id="tw-name"></span></p></div>
+        <div class="tw-heading-actions"><a href="#equipment"><i data-i="layers"></i>设备剖解</a><a href="#overview"><i data-i="map"></i>选址测算</a><a class="tw-accent-btn" href="#design"><i data-i="sliders"></i>调整方案</a></div>
+      </div>
+      <div class="tw-primary">
+        <section class="tw-card tw-visual" aria-label="三维场景">
+          <div class="tw-visual-head"><div class="tw-section-title"><i data-i="cube"></i><h2>空间视图</h2></div>
+            <div class="tw-scene-actions"><div class="tw-tabs" aria-label="选择三维视图">
+              <button type="button" data-twin-mode="campus" aria-pressed="true">园区总览</button>
+              <button type="button" data-twin-mode="cutaway" aria-pressed="false">机房剖视</button>
+              <button type="button" data-twin-mode="territory" aria-pressed="false">区域电网</button>
+            </div>
+            <button id="tw-expand" type="button" aria-label="全屏查看场景" title="全屏查看场景" aria-pressed="false"><i data-i="expand"></i></button></div>
+          </div>
+          <div class="tw-stage">
+            <div id="tw-campus" class="tw-viewport"></div><div id="tw-territory" class="tw-viewport" hidden></div>
+            <div id="tw-scene-detail" class="tw-scene-detail" hidden><strong id="tw-focus-name"></strong><span id="tw-focus-value"></span><button id="tw-drill" type="button" hidden>进入机房剖视 ›</button></div>
+            <div class="tw-camera" aria-label="相机控制">
+              <button type="button" id="tw-motion" aria-label="暂停演示动效">Ⅱ</button>
+              <button type="button" data-camera="in" aria-label="放大场景" title="放大"><i data-i="plus"></i></button>
+              <button type="button" data-camera="out" aria-label="缩小场景" title="缩小"><i data-i="minus"></i></button>
+              <button type="button" data-camera="home" aria-label="复位场景视角" title="复位视角"><i data-i="focus"></i></button>
+            </div>
+          </div>
+          <div class="tw-stage-foot"><span id="tw-scene-source">园区建筑与设备布局为方案示意</span><span class="tw-drag-hint"><i data-i="orbit"></i>拖动旋转 · 滚轮缩放</span></div>
+        </section>
+        <aside class="tw-card tw-inspector" aria-labelledby="tw-load-title">
+          <div class="tw-aside-head"><div class="tw-section-title"><i data-i="energy"></i><h2 id="tw-load-title">负荷模拟</h2></div><span>方案工况</span></div>
+          <div class="tw-gauge-line"><div class="tw-gauge" id="tw-gauge"><div class="tw-gauge-inner"><b id="tw-rate">—</b><span>年均负载率</span></div></div>
+            <div class="tw-reading"><span>年均设施负荷</span><div><strong id="tw-average">—</strong><small>MW</small></div><p>设计 PUE <b id="tw-pue">—</b></p></div>
+          </div>
+          <label class="tw-slider-label" for="tw-load">调整 IT 年均负载率</label>
+          <input id="tw-load" class="tw-range" type="range" min="0" max="100" step="0.1" value="80">
+          <div class="tw-scale"><span>0%</span><span>50%</span><span>100%</span></div>
+          <div class="tw-breakdown"><div class="tw-split-label"><span>年均功率构成</span><span>MW</span></div><div class="tw-split" aria-hidden="true"><i id="tw-it-bar"></i><i id="tw-aux-bar"></i></div>
+            <dl><div><dt><i class="tw-key-compute"></i>IT 设备</dt><dd id="tw-it-load">—</dd></div><div><dt><i class="tw-key-plant"></i>制冷及其他辅助设施</dt><dd id="tw-aux-load">—</dd></div></dl>
+          </div>
+          <a href="#energy" class="tw-electricity-link"><i data-i="clock"></i>查看分时电价模拟</a>
+        </aside>
+      </div>
+      <section class="tw-summary" aria-label="项目测算指标">
+        <div><span><i data-i="bolt"></i>IT 设计功率</span><p><b id="tw-it">—</b><small>MW</small></p></div>
+        <div><span><i data-i="server"></i>规划机柜数</span><p><b id="tw-racks">—</b><small>柜</small></p></div>
+        <div><span><i data-i="energy"></i>年设施用电量</span><p><b id="tw-energy">—</b><small>GWh</small></p></div>
+        <div><span><i data-i="cost"></i>预计年电费</span><p><b id="tw-cost">—</b><small>亿元</small></p></div>
+      </section>
+      <div class="tw-secondary">
+        <section class="tw-card tw-object-card"><div class="tw-aside-head"><div class="tw-section-title"><i data-i="layers"></i><h2>对象详情</h2></div><span id="tw-object-kind">方案模型</span></div>
+          <div class="tw-detail-body"><div class="tw-object-tabs"><button type="button" data-object="it">机房</button><button type="button" data-object="cooling">冷却</button><button type="button" data-object="power">供配电</button></div><h3 id="tw-object-name"></h3><p id="tw-object-description"></p><a id="tw-object-link" target="_blank" rel="noopener noreferrer" hidden>查看地图原始记录</a></div>
+        </section>
+        <section class="tw-card tw-near-card"><div class="tw-aside-head"><div class="tw-section-title"><i data-i="target"></i><h2>附近变电站</h2></div><a href="#overview" id="tw-all-stations">完整排序</a></div><div class="tw-station-list" id="tw-stations"></div><div id="tw-station-status" class="tw-source-note" role="status"></div></section>
+      </div>
+    </section>
+    <section id="equipment" class="page eq-page" hidden aria-labelledby="eq-title">
+      <div class="tw-heading"><div><h1 id="eq-title">设备剖解</h1><p class="tw-project-line"><i data-i="cube"></i><span id="eq-project"></span><span class="tw-separator">/</span>参考设备结构</p></div><div class="tw-heading-actions"><a href="#twin"><i data-i="orbit"></i>返回园区</a><a href="#aidc"><i data-i="server"></i>方案设备清单</a></div></div>
+      <div class="eq-categories" aria-label="设备系统"><button type="button" data-eq-category="rack"><i data-i="server"></i>算力机柜</button><button type="button" data-eq-category="ups"><i data-i="bolt"></i>UPS 供电</button><button type="button" data-eq-category="liquid"><i data-i="drop"></i>冷板液冷</button><button type="button" data-eq-category="air"><i data-i="fan"></i>机房风冷</button></div>
+      <div class="eq-layout">
+        <section class="tw-card eq-workbench" aria-label="设备模型"><div class="tw-visual-head"><div class="eq-crumbs" id="eq-crumbs"></div><button id="eq-expand" type="button" aria-label="全屏查看设备"><i data-i="expand"></i></button></div>
+          <div class="eq-stage" id="eq-stage"><div id="eq-canvas"></div><div class="eq-stage-read"><b id="eq-model-label"></b><span id="eq-stage-caption"></span></div><div class="eq-tools">
+            <button id="eq-motion" type="button" aria-label="暂停演示动效"></button><button id="eq-rotate" type="button" aria-label="自动旋转"><i data-i="orbit"></i></button><button id="eq-zoom-in" type="button" aria-label="放大设备"><i data-i="plus"></i></button><button id="eq-zoom-out" type="button" aria-label="缩小设备"><i data-i="minus"></i></button><button id="eq-reset" type="button" aria-label="复位设备视角"><i data-i="focus"></i></button></div></div>
+          <div class="eq-under"><label for="eq-explode">拆解程度</label><input id="eq-explode" min="0" max="100" value="0" type="range"><output for="eq-explode" id="eq-explode-value">0%</output><span id="eq-engine"></span></div>
+        </section>
+        <aside class="tw-card eq-inspector"><div class="tw-section-title"><i data-i="layers"></i><h2>设备检查</h2></div>
+          <label id="eq-profile-label" class="eq-form">机柜样机<select id="eq-profile"><option value="gb200">GB200 NVL72 液冷参考柜</option><option value="pcie">可配置 PCIe 风冷参考柜</option></select></label>
+          <div id="eq-custom" class="eq-pair" hidden><label class="eq-form">每柜服务器<select id="eq-servers"></select></label><label class="eq-form">每台加速卡<select id="eq-cards"></select></label></div>
+          <div class="eq-mode" id="eq-modes"></div><h3 id="eq-detail-title"></h3><p id="eq-description"></p>
+          <div class="eq-picker" id="eq-objects" aria-label="选择模型部件"></div>
+          <div id="eq-drill-controls"><label class="eq-form" id="eq-unit-label"><span id="eq-unit-text">计算托盘</span><select id="eq-unit"></select></label><button type="button" id="eq-drill" class="eq-cta"></button></div>
+          <div class="eq-facts" id="eq-facts"></div>
+        </aside>
+      </div>
+      <section id="eq-fabric" class="tw-card" hidden></section>
+      <div class="eq-bottom"><section class="tw-card"><div class="tw-section-title"><i data-i="network"></i><h2 id="eq-path-title">柜内通信</h2></div><div id="eq-path" class="eq-path"></div><p id="eq-path-note"></p></section><section class="tw-card"><div class="tw-section-title"><i data-i="book"></i><h2>型号与口径</h2></div><p id="eq-origin"></p><a id="eq-source" target="_blank" rel="noopener noreferrer"></a><p id="eq-project-bom"></p></section></div>
+    </section>
+    <section id="overview" class="page" hidden>
+      <div class="mast">
+        <div><h1>算电选址工作台</h1><p>从电力基础设施选址，到智算中心方案测算。</p></div>
+        <div class="mast-actions"><button class="btn" data-action="export"><i data-i="export"></i>导出方案</button><button class="btn primary" data-action="new"><i data-i="plus"></i>新建方案</button></div>
+      </div>
+      <div class="work-grid">
+        <section class="card geo-card" aria-labelledby="geo-title">
+          <div class="card-title"><div class="section-name"><i class="tile-icon" data-i="map"></i><h2 id="geo-title">基础设施地图</h2></div>
+            <div class="map-head-tools"><a class="world-link" href="#world"><i data-i="globe"></i>全球地图</a><div class="layer-wrap"><button id="layer-button" aria-controls="layers" aria-expanded="false" class="small-btn"><i data-i="layers"></i>图层<i class="chev" data-i="chev"></i></button>
+            <div id="layers" class="popover" hidden><strong>显示图层</strong><label><input type="checkbox" data-layer="lines" checked>输电线路</label><label><input type="checkbox" data-layer="substations" checked>变电站</label><label><input type="checkbox" data-layer="plants" checked>发电设施</label></div></div></div>
+          </div>
+          <div class="map-frame">
+            <div id="geo-map" aria-label="候选场址与周边电力基础设施地图"></div>
+            <iframe id="context-map" title="当前场址全球基础设施地图" hidden></iframe><div id="polar-map" hidden>此坐标超出墨卡托地图可显示的纬度范围。</div><div class="coord-chip"><button type="button" data-action="coordinates" title="输入经纬度定位"><i data-i="target"></i><span id="map-coordinate"></span><i class="chev" data-i="chev"></i></button></div>
+            <div class="map-controls"><button type="button" data-map="plus" aria-label="放大地图" title="放大"><i data-i="plus"></i></button><button type="button" data-map="minus" aria-label="缩小地图" title="缩小"><i data-i="minus"></i></button><button type="button" data-map="reset" aria-label="回到当前场址" title="回到当前场址"><i data-i="focus"></i></button></div>
+          </div>
+          <div class="map-footer"><button class="geo-coordinate-action" data-action="coordinates" hidden>编辑场址坐标</button><div class="legends" aria-label="地图图例"><span><i class="key-line"></i>输电线路</span><span><i class="key-sub"></i>变电站</span><span><i class="key-power"></i>发电设施</span></div><span class="pick-hint"><i data-i="cursor"></i>点击地图选址</span></div>
+        </section>
+        <section class="card plan-card" aria-labelledby="plan-title">
+          <div class="card-title"><div class="section-name"><i class="tile-icon" data-i="sliders"></i><h2 id="plan-title">当前方案</h2></div><span class="save-state" id="save-state"><i></i><span></span></span></div>
+          <div class="plan-content">
+            <div class="project-title-row"><h3 id="current-name"></h3><button class="icon-btn" data-action="rename" title="修改方案名称" aria-label="修改方案名称"><i data-i="edit"></i></button></div>
+            <div class="loc-row"><i data-i="pin"></i><span id="location-name"></span></div>
+            <div class="param-divider"></div>
+            <div class="param-head"><h4>运行参数</h4><span>可编辑假设</span></div>
+            <div id="quick-fields" class="quick-fields"></div>
+            <div id="quick-error" class="form-error" role="status"></div>
+            <button class="design-jump" data-action="design"><i data-i="network"></i>进入方案设计</button>
+          </div>
+        </section>
+      </div>
+      <section id="nearby-section" class="card nearby-card" aria-labelledby="nearby-title">
+        <div class="card-title"><div class="section-name"><i class="tile-icon" data-i="target"></i><h2 id="nearby-title">附近变电站</h2></div>
+          <div class="nearby-filter-row"><label class="radius-label">电压筛选<select id="nearby-voltage"><option value="0">全部</option><option value="110">≥110 kV</option><option value="220">≥220 kV</option><option value="330">≥330 kV</option><option value="500">≥500 kV</option></select></label><label class="radius-label">搜索半径<select id="nearby-radius"><option value="5">5 km</option><option value="15" selected>15 km</option><option value="30">30 km</option></select></label></div></div>
+        <div class="nearby-content"><p id="nearby-state" aria-live="polite"></p><div id="nearby-table"></div><div class="nearby-actions"><button id="nearby-more" class="small-btn" hidden>查看更多</button><button id="nearby-retry" class="small-btn" hidden>重新查询</button></div><p id="nearby-method">按场址至变电站代表点的球面直线距离排序。包含各电压等级及未标电压的已收录站点。接入线路长度与可用容量需另行核实。</p></div>
+      </section>
+      <section class="metrics" aria-labelledby="metric-title"><div class="metric-head"><h2 id="metric-title">测算概览</h2><span><i data-i="refresh"></i>随方案参数更新</span></div><div id="metrics-grid" class="metrics-grid"></div></section>
+    </section>
+    <section id="world" class="page frame-page" hidden><iframe title="全球基础设施地图" id="world-frame" allowfullscreen></iframe></section>
+    <section id="aidc" class="page frame-page" hidden><iframe title="AIDC 设计与数据工作台" id="aidc-frame" allow="fullscreen; clipboard-write" allowfullscreen></iframe></section>
+    <section id="industry" class="page frame-page" hidden><iframe title="电力行业数据库" id="industry-frame"></iframe></section>
+    <section id="design" class="page" hidden></section>
+    <section id="energy" class="page frame-page" hidden><iframe title="EnergyDC 电价与政策资料" id="energy-frame"></iframe></section>
+    <section id="library" class="page" hidden>
+      <div class="mast"><div><h1>方案库</h1><p>管理保存在此浏览器的场址和设计参数。</p></div><div class="mast-actions"><button class="btn" data-action="import"><i data-i="import"></i>导入方案</button><button class="btn primary" data-action="new"><i data-i="plus"></i>新建方案</button></div></div>
+      <div id="project-list" class="project-list"></div>
+    </section>
+  </main>
+  <footer class="site-footer"><div><img src="brand.svg" alt="" width="17" height="17"><span>算电图研</span><span class="footer-brand">GridAtlas</span></div><button data-action="sources">数据来源与测算口径<i data-i="info"></i></button></footer>
+  <dialog id="dialog"><form id="dialog-form"><div class="dlg-head"><h2 id="dialog-title"></h2><button type="button" class="icon-btn" data-action="close" aria-label="关闭"><i data-i="x"></i></button></div><div id="dialog-body"></div><div class="form-error" id="dialog-error" role="alert"></div><div id="dialog-actions" class="dlg-actions"></div></form></dialog>
+  <input id="import-file" type="file" accept=".json,application/json" hidden>
+  <div id="toast" role="status" hidden></div>
+  <noscript>请启用 JavaScript 以使用交互地图和方案测算。</noscript>
+</body>
+</html>

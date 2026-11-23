@@ -1,0 +1,224 @@
+{
+  "verifiedAt": "2026-11-23",
+  "timezone": "Asia/Shanghai",
+  "profiles": [
+    {
+      "id": "sh-35kv-2026-11-16",
+      "title": "上海 35 kV 大工业两部制 · 工作日",
+      "date": "2026-11-16",
+      "region": "上海市",
+      "month": "2026-11",
+      "voltage": "35 kV",
+      "tariffSystem": "两部制",
+      "customerClass": "大工业电网代理购电",
+      "dayType": "工作日",
+      "intervals": [
+        {
+          "start": "00:00",
+          "end": "06:00",
+          "period": "低谷",
+          "price": 0.337126
+        },
+        {
+          "start": "06:00",
+          "end": "08:00",
+          "period": "平时",
+          "price": 0.610036
+        },
+        {
+          "start": "08:00",
+          "end": "11:00",
+          "period": "高峰",
+          "price": 0.937529
+        },
+        {
+          "start": "11:00",
+          "end": "18:00",
+          "period": "平时",
+          "price": 0.610036
+        },
+        {
+          "start": "18:00",
+          "end": "21:00",
+          "period": "高峰",
+          "price": 0.937529
+        },
+        {
+          "start": "21:00",
+          "end": "22:00",
+          "period": "平时",
+          "price": 0.610036
+        },
+        {
+          "start": "22:00",
+          "end": "24:00",
+          "period": "低谷",
+          "price": 0.337126
+        }
+      ],
+      "energyUnit": "元/kWh",
+      "flatLoadAverage": 0.60093925,
+      "demandCharge": 41.6,
+      "demandChargeUnit": "元/kW·月",
+      "capacityCharge": 26.0,
+      "capacityChargeUnit": "元/kVA·月",
+      "sources": [
+        {
+          "label": "国网上海市电力公司月度电价表 · EnergyDC 公开转载，见表一 35 千伏两部制",
+          "url": "https://energydc.cn/policy/shanghai/2026-10/ba0c9a55-d366-11f1-a7f9-a21bc765dd91"
+        },
+        {
+          "label": "上海市政府 · 沪发改价管〔2022〕50号，分时时段",
+          "url": "https://www.shanghai.gov.cn/gwk/search/content/e2652e3ab7ee49438d6e82af8880b160"
+        },
+        {
+          "label": "上海市发展改革委 · 沪发改价管〔2024〕28号，大工业休息日深谷时段",
+          "url": "https://fgw.sh.gov.cn/fgw_jggl/20240613/c753f8153e15492898c2ea3737ee93d5.html"
+        },
+        {
+          "label": "EnergyDC · 上海 2026 年 11 月大工业两部制 35 千伏日历",
+          "url": "https://energydc.cn/calendar/2026-11/shanghai/large-industrial-power/two-part-tariff/voltage-35kv"
+        }
+      ],
+      "note": "本例按 24 小时恒定负荷折算电度加权均价。基本电费单列，按适用的最大需量或容量方式计费。电度单价取月度公示标准表，时段按上海政策划分。"
+    },
+    {
+      "id": "sh-35kv-2026-11-22",
+      "title": "上海 35 kV 大工业两部制 · 休息日",
+      "date": "2026-11-22",
+      "region": "上海市",
+      "month": "2026-11",
+      "voltage": "35 kV",
+      "tariffSystem": "两部制",
+      "customerClass": "大工业电网代理购电",
+      "dayType": "休息日",
+      "intervals": [
+        {
+          "start": "00:00",
+          "end": "06:00",
+          "period": "深谷",
+          "price": 0.173379
+        },
+        {
+          "start": "06:00",
+          "end": "08:00",
+          "period": "平时",
+          "price": 0.610036
+        },
+        {
+          "start": "08:00",
+          "end": "11:00",
+          "period": "高峰",
+          "price": 0.937529
+        },
+        {
+          "start": "11:00",
+          "end": "18:00",
+          "period": "平时",
+          "price": 0.610036
+        },
+        {
+          "start": "18:00",
+          "end": "21:00",
+          "period": "高峰",
+          "price": 0.937529
+        },
+        {
+          "start": "21:00",
+          "end": "22:00",
+          "period": "平时",
+          "price": 0.610036
+        },
+        {
+          "start": "22:00",
+          "end": "24:00",
+          "period": "深谷",
+          "price": 0.173379
+        }
+      ],
+      "energyUnit": "元/kWh",
+      "flatLoadAverage": 0.54635692,
+      "demandCharge": 41.6,
+      "demandChargeUnit": "元/kW·月",
+      "capacityCharge": 26.0,
+      "capacityChargeUnit": "元/kVA·月",
+      "sources": [
+        {
+          "label": "国网上海市电力公司月度电价表 · EnergyDC 公开转载，见表一 35 千伏两部制",
+          "url": "https://energydc.cn/policy/shanghai/2026-10/ba0c9a55-d366-11f1-a7f9-a21bc765dd91"
+        },
+        {
+          "label": "上海市政府 · 沪发改价管〔2022〕50号，分时时段",
+          "url": "https://www.shanghai.gov.cn/gwk/search/content/e2652e3ab7ee49438d6e82af8880b160"
+        },
+        {
+          "label": "上海市发展改革委 · 沪发改价管〔2024〕28号，大工业休息日深谷时段",
+          "url": "https://fgw.sh.gov.cn/fgw_jggl/20240613/c753f8153e15492898c2ea3737ee93d5.html"
+        },
+        {
+          "label": "EnergyDC · 上海 2026 年 11 月大工业两部制 35 千伏日历",
+          "url": "https://energydc.cn/calendar/2026-11/shanghai/large-industrial-power/two-part-tariff/voltage-35kv"
+        }
+      ],
+      "note": "本例按 24 小时恒定负荷折算电度加权均价。基本电费单列，按适用的最大需量或容量方式计费。电度单价取月度公示标准表，时段按上海政策划分。"
+    }
+  ],
+  "updateCadence": [
+    {
+      "category": "代理购电分时电价",
+      "cadence": "按执行月份更新",
+      "basis": "平台发布公告",
+      "detail": "11 月公告记录 10 月末完成当月采集和校核。",
+      "url": "https://energydc.cn/news/china-electricity-price-data-of-202611"
+    },
+    {
+      "category": "电价日历",
+      "cadence": "以月度电价和适用日期展示",
+      "basis": "依赖上游数据",
+      "detail": "同月逐日区分工作日和休息日，未核实后台每日采集频率。",
+      "url": "https://energydc.cn/calendar/2026-11/shanghai/large-industrial-power/two-part-tariff/voltage-35kv"
+    },
+    {
+      "category": "峰谷价差与趋势",
+      "cadence": "随所选月份的电价变化",
+      "basis": "依赖上游数据",
+      "detail": "网站提供月度排行和历史趋势，未见独立定时更新承诺。",
+      "url": "https://energydc.cn/"
+    },
+    {
+      "category": "政策与价格公示",
+      "cadence": "按发布事件收录",
+      "basis": "观察归纳",
+      "detail": "月度购电公示随公告收录，其他政策文件依签发机构发布。",
+      "url": "https://energydc.cn/policy"
+    },
+    {
+      "category": "AI 决策简报",
+      "cadence": "以月份为报告期，分批发布",
+      "basis": "平台发布公告",
+      "detail": "站方 11 月更新公告称深度报告陆续更新，各地上线时间可能不同。",
+      "url": "https://energydc.cn/news/china-electricity-price-data-of-202611"
+    },
+    {
+      "category": "储能知识库",
+      "cadence": "未公布固定频率",
+      "basis": "未公布",
+      "detail": "首页列出持续精选的知识文章。",
+      "url": "https://energydc.cn/"
+    },
+    {
+      "category": "数据、系统与客服公告",
+      "cadence": "随事件发布",
+      "basis": "观察归纳",
+      "detail": "公告列表混合价格更新、版本发布和服务消息。",
+      "url": "https://energydc.cn/news-list"
+    },
+    {
+      "category": "授权时序与政策文件",
+      "cadence": "按月增量，按权益导出",
+      "basis": "平台产品说明",
+      "detail": "平台称买断产品可获取后续增量，自定义导出另有登录和配额规则。",
+      "url": "https://energydc.cn/download"
+    }
+  ]
+}

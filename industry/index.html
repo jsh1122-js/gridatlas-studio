@@ -1,0 +1,5 @@
+<!doctype html><html lang="zh-CN" class="frame-ui frame-industry"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>电力行业数据库 · 算电图研</title><link rel="stylesheet" href="industry.css"><script defer src="industry.js"></script><link rel="stylesheet" href="../frame-theme.css">
+</head><body>
+<header><h1>电力行业数据库</h1><p>检索电力、储能与算力的行业数据，以及政策、标准和研究目录。</p></header>
+<div class="workspace"><aside><label>选择数据集<select id="dataset"></select></label><label>数据分组<select id="section"></select></label><div id="source"></div></aside>
+<main><div class="searchbar"><label for="search">检索记录</label><input type="search" id="search" placeholder="输入省份、项目、型号或指标"><label class="across"><input type="checkbox" id="across">跨数据集</label></div><div id="results" aria-live="polite">正在加载数据快照…</div><div id="rows"></div><button id="more" hidden>显示更多记录</button></main></div><dialog id="raw-dialog"><div class="raw-bar"><strong id="raw-title"></strong><button id="close-raw">关闭</button></div><iframe id="raw-frame" title="上游完整 JSON 原表" referrerpolicy="no-referrer"></iframe></dialog></body></html>

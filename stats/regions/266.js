@@ -1,0 +1,1 @@
+window.GridStatsRegions[266]={"region":"Vatican City","plants":[["44658918","Centrale Termoelettrica","","","","gas","combustion",""]],"construction":[],"area":{"date":"2026-11-22","sources":[["gas","","1"],["All","0 kW","1"]],"lines":[],"history":[["2026-10",{"plant_count":1.0,"total_output":null}],["2026-11",{"plant_count":1.0,"total_output":null}]]}};

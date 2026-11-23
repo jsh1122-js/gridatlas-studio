@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN" class="frame-ui frame-world"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0a1421"><link rel="icon" href="../brand.svg" type="image/svg+xml"><title>全球基础设施地图 · 算电图研</title><link rel="stylesheet" href="vendor/maplibre-gl.css"><link rel="stylesheet" href="world.css"><link rel="stylesheet" href="../frame-theme.css">
+</head>
+<body>
+<main class="atlas">
+  <div id="map" aria-label="全球基础设施交互地图"></div>
+  <div class="tools" aria-label="地图工具">
+    <form id="search"><input id="query" autocomplete="off" maxlength="160" aria-label="地点名称或纬度、经度" placeholder="搜索地点或输入纬度、经度"><button type="submit">定位</button></form>
+    <button id="layers-button" type="button" aria-controls="layers" aria-expanded="false">图层</button>
+    <button id="stats-button" type="button" aria-controls="stats" aria-expanded="false">统计</button>
+  </div>
+  <div id="search-results" class="panel result-panel" hidden></div>
+  <section id="layers" class="panel side-panel" hidden><div class="panel-title"><h2>显示图层</h2><button class="close" aria-label="关闭图层">×</button></div><div id="layer-list"></div><details><summary>输电线路颜色</summary><div id="voltage" class="legend"></div></details></section>
+  <section id="stats" class="panel side-panel" hidden><div class="panel-title"><h2>全球电力统计</h2><button class="close" aria-label="关闭统计">×</button></div><p id="stats-date"></p><div id="stat-table"></div><label for="region">国家与地区名录</label><input id="region" list="regions" placeholder="选择或输入地区英文名称"><datalist id="regions"></datalist><div id="stat-links"></div></section>
+  <section id="feature-panel" class="panel side-panel" hidden><div class="panel-title"><h2>当前位置</h2><button class="close" aria-label="关闭设施资料">×</button></div><div id="location-details"></div><button class="primary" id="use-site">选为方案场址</button><div id="feature-list"></div></section>
+  <div class="bottom-bar"><span id="state" role="status">正在连接全球图层…</span><button id="retry" hidden>重载地图</button><a id="original" target="_blank" rel="noopener noreferrer" href="https://openinframap.org/">原图</a></div>
+  <div class="credits"><span id="night-credit" hidden><a href="https://ladsweb.modaps.eosdis.nasa.gov/missions-and-measurements/products/VNP46A4/" target="_blank" rel="noopener noreferrer">NASA Black Marble 2024</a> · </span><span id="qa-credit" hidden><a href="https://osmose.openstreetmap.fr/" target="_blank" rel="noopener noreferrer">OSMose</a> · </span>© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a> · <a href="https://openinframap.org/copyright" target="_blank" rel="noopener noreferrer">Open Infrastructure Map</a> · <a href="sources.html" target="_blank" rel="noopener">数据说明</a></div>
+</main><script src="../station-view.js"></script><script type="module" src="world.mjs"></script>
+</body></html>

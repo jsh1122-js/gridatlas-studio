@@ -1,0 +1,16 @@
+.grid-geo{position:relative;isolation:isolate;overflow:hidden;background:#152634;color:#d5e8e8;font-family:Inter,"PingFang SC","Microsoft YaHei",sans-serif}
+.grid-geo .geo-surface{display:block;width:100%;height:100%;cursor:crosshair;touch-action:none;outline-offset:-3px}
+.grid-geo .geo-surface.dragging{cursor:grabbing}
+.grid-geo .geo-scale{position:absolute;z-index:1;bottom:10px;left:13px;display:flex;gap:0;flex-direction:column;align-items:center;color:#d8e8ed;font:11px/1.15 "SFMono-Regular",Consolas,monospace;text-shadow:0 1px 3px #000;pointer-events:none}
+.grid-geo .geo-scale-line{height:5px;border:1px solid #cfdfeb;border-top:0;filter:drop-shadow(0 1px 1px #0d1721);margin-top:2px}
+.grid-geo .geo-credits{position:absolute;z-index:3;right:8px;bottom:7px;color:#d1e2e8;background:#101f2ee8;border:1px solid #52718680;border-radius:4px;line-height:1.35;font-size:11px}
+.grid-geo .geo-credits summary{padding:3px 6px;cursor:pointer;list-style:none}
+.grid-geo .geo-credits summary::-webkit-details-marker{display:none}
+.grid-geo .geo-credits summary::before{content:"ⓘ";font-size:12px;margin-right:4px}
+.grid-geo .geo-credits[open]{max-width:min(300px,calc(100% - 20px));padding:2px;box-shadow:0 5px 18px #0006}
+.grid-geo .geo-credit-body{padding:4px 6px 6px;font-size:12px;line-height:1.65}
+.grid-geo .geo-credit-body p{margin:0 0 3px}
+.grid-geo .geo-credit-body a,.grid-geo .geo-outside a{color:#9ae4d6;text-decoration:underline;text-underline-offset:2px}
+.grid-geo .geo-outside{position:absolute;left:50%;bottom:27%;transform:translateX(-50%);text-align:center;background:#102233e8;padding:7px 12px;border:1px solid #5874868c;border-radius:6px;color:#dae8ed;font-size:12px;line-height:1.65;max-width:90%;width:max-content}
+.grid-geo .geo-outside[hidden]{display:none}
+@media(max-width:420px){.grid-geo .geo-scale{left:8px;bottom:8px}.grid-geo .geo-credits{right:5px;bottom:5px}}

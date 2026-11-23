@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN" class="frame-ui frame-energy">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>电价与政策资料 · 算电图研</title>
+<link rel="stylesheet" href="energy.css">
+<script src="local-csv.js" defer></script><script src="energy.js" defer></script>
+<link rel="stylesheet" href="../frame-theme.css">
+</head>
+<body>
+<header><div><h1>电价与政策资料</h1></div><a href="https://energydc.cn/" target="_blank" rel="noopener">EnergyDC 原站</a></header>
+<nav aria-label="电价资料视图"><button data-view="simulation" aria-pressed="true">分时电价模拟</button><button data-view="directory" aria-pressed="false">公开目录</button><button data-view="tariff" aria-pressed="false">电价样本</button><button data-view="csv" aria-pressed="false">我的电价表</button><button data-view="updates" aria-pressed="false">更新口径</button></nav>
+<section id="simulation" class="view">
+  <div class="sim-head">
+    <div><h2>上海分时电价模拟</h2><p id="scenario-scope">正在载入已核验样本…</p></div>
+    <label class="scenario-date">计价样本<select id="scenario-profile" aria-label="选择计价样本"></select></label>
+  </div>
+  <div class="sim-layout">
+    <div class="plot-panel">
+      <div class="plot-head"><h3>24 小时电价曲线</h3><span id="scenario-legend" class="legend"></span></div>
+      <canvas id="tariff-chart" role="img" aria-label="上海分时电价，拖动下方滑块逐小时查看">逐时费率可在电价样本中查阅。</canvas>
+      <div class="scrubber"><button id="hour-play" type="button" aria-pressed="false">播放</button><label for="sim-hour">模拟时刻</label><input id="sim-hour" type="range" min="0" max="23" step="1" value="8" aria-label="选择模拟小时"><output id="hour-label" for="sim-hour">08:00</output></div>
+    </div>
+    <aside class="readout">
+      <div class="readout-head"><h3>选定时段</h3><span id="period-tag" class="period-tag">—</span></div>
+      <p id="interval-label" class="interval-label">—</p>
+      <div class="price-reading"><strong id="period-price">—</strong><small>元/kWh</small></div>
+      <div class="readout-rule"></div>
+      <label class="load-label" for="sim-load">模拟恒定设施负荷</label>
+      <div class="load-edit"><input id="sim-load" type="number" value="1" min="0" step="any"><span>MW</span><button id="sync-load" type="button" hidden>套用方案</button></div>
+      <p class="load-source" id="load-origin">独立演示负荷</p>
+      <div class="hourly-cost"><span>本小时电度费</span><b id="hour-cost">—</b></div>
+    </aside>
+  </div>
+  <div class="summary-grid">
+    <div><span>全天加权均价</span><strong id="mean-price">—</strong><small>元/kWh</small></div>
+    <div><span>当日峰谷价差</span><strong id="price-spread">—</strong><small>元/kWh</small></div>
+    <div><span>全天模拟电度费</span><strong id="day-cost">—</strong><small>万元</small></div>
+  </div>
+  <div class="sim-note"><p>以该上海样本计价，全天负荷保持恒定，基本电费另计。</p><button id="view-source" type="button">查看费率明细及来源</button></div>
+</section>
+<section id="directory" class="view" hidden>
+<div class="filters"><label>资料类别<select id="category"></select></label><label>地区<select id="region"><option value="">全部地区</option></select></label><label>路径月份<select id="period"><option value="">全部月份</option></select></label><label>检索<input id="search" type="search" placeholder="例如 蒙西、上海、2026-11"></label></div>
+<div class="card"><p class="status" id="catalog-status" role="status">正在读取来源目录…</p><div id="list"></div><div class="pager"><button id="prev" disabled>上一页</button><span id="pages"></span><button id="next" disabled>下一页</button></div></div>
+<p class="note">月份取自来源网址。政策发布月份和电价执行月份可能不同，以公示正文为准。目录只列公开网页入口。</p>
+</section>
+<section id="tariff" class="view" hidden><div id="tariffs" class="card">正在读取核验样本…</div></section>
+<section id="csv" class="view" hidden><div id="csv-host" class="card"></div></section>
+<section id="updates" class="view" hidden><div class="card"><h2>哪些资料会更新</h2>
+<p class="note">本站计划于北京时间每天 09:00 检查公开目录，并核对上海样本的新月份与更正。目录快照日期表示上一次内容变更的时间。</p><div id="cadence"></div>
+<p class="note">目录依据原站公布的站点地图生成。来源未更新目录时，本站可能晚于原站页面。历史时序 CSV、批量政策附件由原站会员导出或按地区购买。</p>
+<div class="links"><a target="_blank" rel="noopener" href="https://energydc.cn/sitemap/sitemap.xml">站点地图</a><a target="_blank" rel="noopener" href="https://energydc.cn/news-list">发布与更正记录</a><a target="_blank" rel="noopener" href="https://energydc.cn/download">正式下载中心</a><a target="_blank" rel="noopener" href="https://energydc.cn/terms">服务协议</a></div></div></section>
+</body></html>

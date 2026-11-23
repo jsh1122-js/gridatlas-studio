@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN" class="frame-ui frame-aidc">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AIDC 设计资料库 · 算电图研</title>
+    <link rel="stylesheet" href="catalog.css" />
+    <link rel="stylesheet" href="topology.css" />
+    <script defer src="topologies.js"></script>
+    <script defer src="finance.js"></script>
+    <script defer src="catalog.js"></script>
+  <link rel="stylesheet" href="../frame-theme.css">
+</head>
+  <body>
+    <header>
+      <div>
+        <h1>AIDC 设计资料库</h1>
+        <p>查设备参数、配置场景清单，将选址与运行假设带入项目。</p>
+      </div>
+      <a
+        class="external"
+        href="https://newdpower.cloud/aidc-design.html"
+        target="_blank"
+        rel="noopener"
+        >原版设计工作台 ↗</a
+      >
+    </header>
+    <nav aria-label="AIDC 数据集" id="tabs"></nav>
+    <main>
+      <div id="err" role="alert" hidden></div>
+      <section id="body" aria-live="polite">正在读取设备与设计资料…</section>
+    </main>
+    <dialog id="detail">
+      <div class="d-head">
+        <h2 id="d-title"></h2>
+        <button id="close" aria-label="关闭详情">关闭</button>
+      </div>
+      <div id="d-body"></div>
+    </dialog>
+    <noscript
+      >请启用 JavaScript 以检索资料。<a
+        href="https://newdpower.cloud/aidc-design.html"
+        >打开 NewdPower 工作台</a
+      ></noscript
+    >
+  </body>
+</html>

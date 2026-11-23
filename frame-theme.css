@@ -1,0 +1,169 @@
+/* Shared interface for the project tools. Map symbology and tariff period colours
+   keep their data-specific meanings inside these surfaces. */
+:root.frame-ui {
+  --frame-bg: #0a1421;
+  --frame-panel: #111f30;
+  --frame-inset: #0d1927;
+  --frame-raised: #192d40;
+  --frame-selected: #193b40;
+  --frame-line: #2c4052;
+  --frame-border: #445c6e;
+  --frame-text: #edf5fc;
+  --frame-muted: #afc0ce;
+  --frame-mint: #76e2c6;
+  --frame-amber: #efbd80;
+  --frame-hover: #203747;
+  --blue: var(--frame-mint);
+  --border: var(--frame-line);
+  accent-color: var(--frame-mint);
+  color-scheme: dark;
+  background: var(--frame-bg);
+  color: var(--frame-text);
+  font-family: Inter,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+  scrollbar-color: #4c6676 var(--frame-inset);
+}
+.frame-ui body {
+  background: var(--frame-bg);
+  color: var(--frame-text);
+  font-family: inherit;
+}
+.frame-ui ::selection {background: #386f6b; color: #fff}
+.frame-ui h1 {font-size: clamp(1.3rem,2.3vw,1.75rem); line-height: 1.3; letter-spacing: -.045em}
+.frame-ui :is(h1,h2,h3,.entry strong,.snap strong,.gt-summary strong) {color: var(--frame-text)}
+.frame-ui :is(header p,.hint,.sub,.stat,.empty,.src-line,.entry small,.fin label,
+  .gt-heading span,.gt-guide,.gt-summary span,.snap>div,.src-note,.meta,.row>summary small,
+  .property>span:first-child,.controls label,.filters label,.kpis small,footer,
+  .page-nav,.note,.fine,.pager span,td small,.ecsv-meta) {color: var(--frame-muted)}
+.frame-ui header p:not(.product) {color: var(--frame-muted)}
+.frame-ui :is(a,.link,details summary,.gt-device-list b,.product) {color: var(--frame-mint)}
+.frame-ui a:hover {color: #c2f8e9}
+.frame-ui :is(.panel,.gt,.card,.filters,.kpis article,dialog,.d-head,.gt-summary>div,
+  .frame-industry aside,.frame-industry main) {
+  border-color: var(--frame-line);
+  background: var(--frame-panel);
+  color: var(--frame-text);
+}
+.frame-ui :is(.table-wrap,.row,.property,.nested,.pagebar,.tabs,.data-tree,.gt-summary,
+  .gt-summary>div+div,.sample-block+.sample-block,.grid td,.grid th,.data-tree dt,.data-tree dd,th,td) {
+  border-color: var(--frame-line);
+}
+.frame-ui :is(.card th,.grid th,th,.data-tree dt,.record,.raw-source,.snap>div,.entry) {
+  background: var(--frame-inset);
+  border-color: var(--frame-line);
+  color: var(--frame-muted);
+}
+.frame-ui .data-tree dd {color: var(--frame-text)}
+.frame-ui :is(.table-wrap,.table-scroll,.card,.grid) tbody tr:hover td {background: #192c3b}
+.frame-ui :is(dialog,.raw-source) {box-shadow: 0 12px 42px #040b1280}
+.frame-ui dialog::backdrop {background: #030a13b3}
+.frame-ui :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),select,textarea) {
+  background: var(--frame-inset);
+  color: var(--frame-text);
+  border-color: var(--frame-border);
+}
+.frame-ui :is(input,textarea)::placeholder {color: #92a6b7; opacity: 1}
+.frame-ui :is(input[type="checkbox"],input[type="radio"],input[type="range"]) {accent-color: var(--frame-mint)}
+.frame-ui :is(button,a.external,a.button,.gt-tabs button,.gt-device-list button):not(.gt-node) {
+  background: var(--frame-raised);
+  color: #d5e8ed;
+  border-color: var(--frame-border);
+  transition: background-color 140ms ease,border-color 140ms ease,color 140ms ease;
+}
+.frame-ui :is(button,a.external,a.button):not(.gt-node):not(:disabled):hover {
+  background: var(--frame-hover);
+  color: #e9fff8;
+  border-color: #69948f;
+}
+.frame-ui :is(button.primary,.tools form button) {
+  color: var(--frame-text); background: var(--frame-selected); border: 1px solid #43766e;
+}
+.frame-ui button.link:not(.gt-node) {padding: 0; border-radius: 0; background: transparent; color: var(--frame-mint); border: 0}
+.frame-ui button.link:not(.gt-node):not(:disabled):hover {background: transparent; color: #c2f8e9}
+.frame-ui :is(nav,.tabs) {border-color: var(--frame-line); background: transparent}
+.frame-ui :is(nav,.tabs) button:not(.gt-node) {background: transparent; color: var(--frame-muted); border-color: transparent}
+.frame-ui :is(nav,.tabs,.gt-tabs,.tools) button:not(.gt-node):is([aria-current="page"],[aria-pressed="true"],[aria-expanded="true"]) {
+  background: var(--frame-selected); color: var(--frame-mint); border-color: #46746f;
+}
+.frame-ui nav button[aria-current="page"]::after {background: var(--frame-mint)}
+.frame-ui :is(button,a,summary,input,textarea,select,[tabindex]):focus-visible {
+  outline: 2px solid var(--frame-mint); outline-offset: 2px;
+}
+.frame-ui :is(.status,.ecsv [data-status]) {color: var(--frame-mint)}
+.frame-ui :is(#err,[aria-invalid="true"]) {color: var(--frame-amber); border-color: #98724f; background: #302820}
+.frame-ui code {color: #bfd9e5}
+.frame-ui input::file-selector-button {
+  background: var(--frame-raised); border: 1px solid var(--frame-border); color: var(--frame-text);
+  padding: 5px 9px; border-radius: 5px; margin-right: 8px; cursor: pointer;
+}
+.frame-ui button:disabled {opacity: .45; cursor: default}
+@media (prefers-reduced-motion: reduce) {
+  .frame-ui *, .frame-ui *::before, .frame-ui *::after {
+    scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important;
+  }
+}
+
+/* Design library: preserve the system-specific marker colours and selected node outline. */
+.frame-aidc .gt-canvas {
+  background-color: var(--frame-inset);
+  background-image: linear-gradient(#253a4a70 1px,transparent 1px),linear-gradient(90deg,#253a4a70 1px,transparent 1px);
+}
+.frame-aidc .gt-node {background: var(--frame-raised); border-color: var(--frame-border); border-left-color: var(--node)}
+.frame-aidc .gt-node.gt-none {background: var(--frame-inset)}
+.frame-aidc .gt-node:hover {background: var(--frame-hover)}
+.frame-aidc .gt-node:focus-visible {outline-color: var(--frame-mint)}
+.frame-aidc .gt-select select {color: var(--frame-text)}
+.frame-aidc .gt-summary>div {background: var(--frame-inset)}
+.frame-aidc nav button[aria-current="page"] {background: var(--frame-selected)}
+.frame-aidc .entry {color: var(--frame-text)}
+
+/* Industry data, regional statistics, and tariff catalogues. */
+.frame-industry header,.frame-energy header,.frame-energy nav {
+  background: var(--frame-inset); border-color: var(--frame-line);
+}
+.frame-industry :is(.workspace>aside,.workspace>main) {
+  background: var(--frame-panel); border-color: var(--frame-line);
+}
+.frame-industry aside label,.frame-industry #results,.frame-stats #info {color: var(--frame-muted)}
+.frame-industry #source,.frame-industry #raw-frame {border-color: var(--frame-line)}
+.frame-industry .row>summary {color: var(--frame-text)}
+.frame-industry .row>summary:hover {color: var(--frame-mint)}
+.frame-industry :is(#more,#close-raw) {background: var(--frame-raised); color: var(--frame-mint); border-color: var(--frame-border)}
+.frame-industry #raw-frame,.frame-aidc .raw-source {color-scheme: dark; background: var(--frame-inset)}
+.frame-stats .controls .source-link {color: var(--frame-mint)}
+.frame-stats .kpis strong {color: var(--frame-text)}
+.frame-stats .tabs button[aria-pressed="true"] {background: var(--frame-selected); color: var(--frame-mint)}
+.frame-energy {
+  --sim-bg: var(--frame-bg); --sim-panel: var(--frame-panel); --sim-line: var(--frame-line);
+  --sim-ink: var(--frame-text); --sim-muted: var(--frame-muted); --sim-mint: var(--frame-mint);
+}
+.frame-energy header h1 {font-size: clamp(1.2rem,2.1vw,1.5rem)}
+.frame-energy nav button[aria-pressed="true"] {background: transparent; border-bottom-color: var(--frame-mint)}
+.frame-energy :is(.sample-block,.ecsv)>p {color: var(--frame-muted)}
+.frame-energy .ecsv :is(.ecsv-toolbar,.ecsv-pager) {display: flex; gap: 9px; align-items: center; flex-wrap: wrap; margin: 10px 0}
+.frame-energy #csv-host table {border: 1px solid var(--frame-line)}
+.frame-energy .ecsv-scroll {margin: 8px 0}
+.frame-energy .ecsv [data-count] {color: var(--frame-muted); font-size: 13px}
+
+/* World map UI. Cartographic layer paints are defined by the upstream map style. */
+.frame-world .atlas {background: var(--frame-inset)}
+.frame-world :is(.panel,.tools form,.tools>button,.maplibregl-ctrl-group,.bottom-bar,.credits,.maplibregl-ctrl-scale) {
+  background: #101f2ff5; border-color: var(--frame-border); color: var(--frame-text);
+  box-shadow: 0 2px 12px #030a1540;
+}
+.frame-world .tools form:focus-within {outline-color: var(--frame-mint)}
+.frame-world .tools input {background: transparent}
+.frame-world :is(.panel h3,.panel p,.feature dt,.stats-table dt,#location-details) {color: var(--frame-muted)}
+.frame-world :is(.feature,.stats-table,.panel details) {border-color: var(--frame-line)}
+.frame-world :is(.credits,.bottom-bar) a {color: var(--frame-mint)}
+.frame-world .panel .close {background: transparent; color: var(--frame-muted)}
+.frame-world .maplibregl-ctrl-group button {background: transparent; border-color: var(--frame-line); border-radius: 0}
+.frame-world .maplibregl-ctrl-group button:hover {background: var(--frame-hover)}
+.frame-world .maplibregl-ctrl-group .maplibregl-ctrl-icon {filter: invert(1) brightness(.95)}
+.frame-world .maplibregl-popup-content {background: var(--frame-panel); color: var(--frame-text)}
+.frame-world .maplibregl-popup-anchor-bottom .maplibregl-popup-tip {border-top-color: var(--frame-panel)}
+.frame-world .maplibregl-popup-anchor-top .maplibregl-popup-tip {border-bottom-color: var(--frame-panel)}
+.frame-world-sources body {padding-bottom: 24px}
+@media (max-width: 650px) {
+  .frame-aidc .table-scroll .grid:has(th:nth-child(4)) {min-width: 580px}
+  .frame-aidc .table-scroll .grid td:first-child {min-width: 140px}
+}
