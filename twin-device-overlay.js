@@ -4,7 +4,7 @@
   const ns='http://www.w3.org/2000/svg';
   const svg=(tag,attrs={})=>{const e=document.createElementNS(ns,tag);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,v);return e;};
   const palette={power:'#f8bc64',supply:'#66e6dd',return:'#ffa68d',signal:'#c5a8ff',air:'#8dc5ff'};
-  function mount(host,onSelect){
+  function mount(host,onSelect,onCurrent){
     const ink=svg('svg',{'aria-hidden':'true',class:'tw-trace-ink'}),defs=svg('defs');
     const labels=document.createElement('div');labels.className='tw-trace-labels';
     ink.append(defs);host.append(ink,labels);
@@ -18,10 +18,16 @@
       const {width,height}=entries[0].contentRect;dims=[width,height];last='';if(width&&height&&projector)draw(projector);
     });observer.observe(host);
     function makePin(key,title,kind,current){
-      const b=document.createElement('button');b.type='button';b.className='tw-trace-pin';b.dataset.sceneDevice=key;
+      const interactive=!current||(key.startsWith('cooling-unit-')&&onCurrent);
+      const b=document.createElement(interactive?'button':'span');if(interactive)b.type='button';
+      b.className='tw-trace-pin';b.dataset.sceneDevice=key;
       b.dataset.current=String(current);b.style.setProperty('--tone',palette[kind]||palette.power);b.textContent=title;
       if(current)b.setAttribute('aria-current','true');
-      b.title=current?'当前观察 · '+title:'观察'+title;b.onclick=e=>{e.stopPropagation();if(!current)onSelect(key);};
+      b.title=current?(interactive?'查看'+title+'的部件':'当前观察 · '+title):'观察'+title;
+      if(interactive){
+        b.setAttribute('aria-label',b.title);
+        b.onclick=e=>{e.stopPropagation();if(current)onCurrent(key);else onSelect(key);};
+      }else b.style.pointerEvents='none';
       const dot=svg('circle',{r:current?4:3.4,fill:palette[kind]||palette.power,stroke:'#142735','stroke-width':1.25});
       const stem=svg('line',{stroke:palette[kind]||palette.power,'stroke-width':1,opacity:.64});
       labels.append(b);return {key,b,current,dot,stem};

@@ -89,7 +89,7 @@
       changeMode('campus');selectCampus(null);campus?.setLayoutView(true);
     }
     $('layout').onclick=()=>layoutActive?campus?.setLayoutView(false):openLayout();
-    const overlay=GridDeviceOverlay.mount($('device-ink'),key=>observe(key));
+    const overlay=GridDeviceOverlay.mount($('device-ink'),key=>observe(key),showCoolingParts);
     const panel=GridDeviceLinks.mount($('device-panel'),{
       onSelect:key=>observe(key),onBack:()=>{
         if(observing){
@@ -100,6 +100,7 @@
       },
       onPreview:link=>{
         if(paintingPanel)return;
+        closeCoolingParts();
         previewing=link;overlay.preview(link);
         if(!observing&&rackState&&link){
           const next=rackState.slotId?'psu':'rack';observe(next,{preview:link});
@@ -109,10 +110,12 @@
         }
       },
       onView:(near,d)=>{
+        closeCoolingParts();
         if(!observing)observe(d.key);
         if(d.key.startsWith('cooling-unit-'))changeMode(near?'campus':'cutaway',true);
         closeView=near;panel.setCloseView(near);frameObservation();
       },
+      onParts:()=>coolingDetail.isOpen()?closeCoolingParts():showCoolingParts(),
       onDetail:(target,d)=>{
         if(d.key==='rack'||d.key==='psu'){
           if(mode!=='cutaway')changeMode('cutaway');
@@ -123,6 +126,28 @@
         const revision=watchRevision;onInspect(target,{inPlace:true,valid:()=>revision===watchRevision});
       }
     });
+    const coolingDetail=GridCoolingDetail.mount({stage:visual.querySelector('.tw-stage'),panel:panel.partsHost,
+      onSelect:updateProjection,onClose:closeCoolingParts});
+    function showCoolingParts(){
+      if(!observing?.key.startsWith('cooling-unit-'))return;
+      if(coolingDetail.isOpen())return;
+      if(mode!=='campus')changeMode('campus',true);
+      closeView=true;panel.setCloseView(true);frameObservation();
+      $('device-ink').hidden=true;
+      panel.partsHost.hidden=false;panel.setPartsOpen(true);
+      coolingDetail.open(observing.title);
+      $('scene-source').textContent='点部件标记可查看风机、换热面和水管接口';
+      updateProjection();
+    }
+    function closeCoolingParts(){
+      if(!coolingDetail.isOpen())return;
+      coolingDetail.close();panel.partsHost.hidden=true;panel.setPartsOpen(false);
+      $('device-ink').hidden=!observing;
+      if(observing){
+        $('scene-source').textContent='连线表示设备间的功能关系与传递方向';
+        updateProjection();
+      }
+    }
     function configForDevice(){
       const units=Math.min(4,Math.max(2,Math.round(2+Math.log2(metrics.facility/80))));
       yardUnit=Math.min(yardUnit,units);
@@ -132,6 +157,10 @@
     }
     function updateProjection(){
       if(!observing||!campus)return;
+      if(coolingDetail.isOpen()){
+        coolingDetail.updateProjection(campus.getCoolingPartProjection(observing.key));
+        return;
+      }
       overlay.draw(keys=>campus.getEquipmentProjection(keys));
     }
     function paintObservation(d){
@@ -142,6 +171,7 @@
       $('scene-source').textContent='连线表示设备间的功能关系与传递方向';updateProjection();
     }
     function clearObservation(restore=true){
+      closeCoolingParts();
       ++watchRevision;observing=null;previewing=null;closeView=false;panel.clear();overlay.update(null);visual.classList.remove('tw-observing');
       if(restore)campus?.clearEquipmentFocus();
       if(mode!=='territory')$('scene-source').textContent=mode==='cutaway'?'机柜为代表性示意，规划数量按方案折算':campusNote;
@@ -162,6 +192,7 @@
       if(unit)yardUnit=Number(unit[1]||1);
       const plant=/^cooling-unit-(\d+)$/.exec(key);if(plant)coolingUnit=Number(plant[1]);
       const cfg=configForDevice(),d=GridDeviceLinks.describe(key,cfg);if(!d)return;
+      closeCoolingParts();
       const peers=[...new Set(d.links.filter(link=>link.kind!=='reference').map(link=>link.key))];
       const openRoom=!outside(key)||(!plant&&peers.some(p=>!outside(p)));
       if(mode==='territory')changeMode(openRoom?'cutaway':'campus');
@@ -181,6 +212,7 @@
       }else if(!observing)panel.clear();
     }
     function inspectTarget(key){
+      if(key===observing?.key&&key?.startsWith('cooling-unit-')){showCoolingParts();return;}
       if(mode==='cutaway' && (key==='psu'||key==='rack'||key?.startsWith('rack:'))){campus?.openRack(key==='psu'?1:null);return;}
       observe(key);
     }

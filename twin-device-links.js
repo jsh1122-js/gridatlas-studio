@@ -174,7 +174,7 @@
   }
 
   const element=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text)n.textContent=text;return n;};
-  function mount(host,{onSelect,onDetail,onBack,onPreview,onView}={}){
+  function mount(host,{onSelect,onDetail,onBack,onPreview,onView,onParts}={}){
     const box=element('section','tdl-panel'),head=element('div','tdl-head'),left=element('div','tdl-heading');
     const category=element('span','tdl-category'),title=element('h3'),summary=element('p','tdl-summary');
     title.tabIndex=-1;left.append(category,title);head.append(left);
@@ -197,21 +197,31 @@
       onPreview?.(data?.links.find(l=>l.id===previewId)||null);
     });
     const detailButton=action('部件剖解',()=>data&&onDetail?.(data.detailTarget,data));
+    const partsHost=element('div');partsHost.id='tw-cooling-parts';partsHost.hidden=true;
+    const partsButton=action('查看机组部件',()=>onParts?.());
+    partsButton.hidden=true;partsButton.setAttribute('aria-controls',partsHost.id);
+    function setPartsOpen(value){
+      partsButton.setAttribute('aria-expanded',String(value));
+      partsButton.textContent=value?'收起机组部件':'查看机组部件';
+    }
+    setPartsOpen(false);
     const viewButton=action('设备近景',()=>data&&onView?.(!closeView,data));
     function setCloseView(value){closeView=Boolean(value);viewButton.setAttribute('aria-pressed',String(closeView));viewButton.textContent=closeView?'查看联动':'设备近景';}
     setCloseView(false);if(onView)actions.append(viewButton);
+    if(onParts)actions.append(partsButton);
     if(onDetail)actions.append(detailButton);
     const backButton=action('返回机房',()=>onBack?.());
     if(onBack)actions.append(backButton);
     head.append(actions);
     const list=element('div','tdl-links'),extra=element('details','tdl-boundaries'),extraTitle=element('summary','','系统边界'),bound=element('ul');extra.append(extraTitle,bound);
-    box.append(head,summary,list,extra);host.replaceChildren(box);host.hidden=true;
+    box.append(head,summary,partsHost,list,extra);host.replaceChildren(box);host.hidden=true;
     function update(key,options){
       if(disposed)return null;
       if(key&&typeof key==='object'){options=key;key=options.key;}
       const next=describe(key,options||{});
       if(!next){clear();return null;}
       const changed=next.key!==data?.key;data=next;
+      partsButton.hidden=!coolingNumber(data.key);
       detailButton.textContent=data.detailLabel;
       backButton.textContent=data.key.startsWith('sub-')||coolingNumber(data.key)?'返回园区':'返回机房';
       const physical=data.links.filter(l=>l.kind!=='reference');
@@ -239,7 +249,7 @@
       return data;
     }
     function clear(){data=null;followed=false;host.hidden=true;resetPreview();}
-    return {update,clear,setCloseView,destroy(){disposed=true;clear();box.remove();}};
+    return {update,clear,setCloseView,partsHost,setPartsOpen,destroy(){disposed=true;clear();box.remove();}};
   }
   root.GridDeviceLinks=Object.freeze({describe,resolveSceneKey,mount});
 })(typeof window==='undefined'?globalThis:window);
