@@ -166,7 +166,8 @@
     const make=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text)n.textContent=text;return n;};
     const box=make('section','tpt-panel'),head=make('div','tpt-head'),heading=make('h3','','供电巡视');
     const counter=make('span','tpt-count'),stage=make('div','tpt-stage'),title=make('strong','tpt-title'),subtitle=make('p','tpt-text');
-    stage.setAttribute('aria-live','polite');stage.setAttribute('aria-atomic','true');stage.append(title,subtitle);head.append(heading,counter);
+    const medium=make('span','tpt-medium');medium.hidden=true;
+    stage.setAttribute('aria-live','polite');stage.setAttribute('aria-atomic','true');stage.append(medium,title,subtitle);head.append(heading,counter);
     const progress=make('progress','tpt-progress');progress.max=100;progress.setAttribute('aria-label','供电巡视总进度');
     const controls=make('div','tpt-controls');
     function button(text,act,cls){const b=make('button',cls,text);b.type='button';b.addEventListener('click',act);controls.append(b);return b;}
@@ -186,13 +187,25 @@
     let lastStep=null,requestedVoice='',preferredVoice='',voiceHint='';
     const preference='gridatlas.powerTour.captionsOnly';
     let captionsOnly=false;
+    const mediumNames={supply:'供水',return:'回水',exchange:'换热'};
+    function setNarrative(kind='power',origin=''){
+      const title=kind==='cooling'?'冷却巡视':'供电巡视';
+      host.dataset.kind=kind;heading.textContent=origin?title+' · '+origin:title;
+      host.setAttribute('aria-label',title);progress.setAttribute('aria-label',title+'总进度');
+    }
+    setNarrative();
     try{captionsOnly=root.localStorage.getItem(preference)==='1';}catch{/* Browser storage is optional. */}
     function render(s){
-      host.hidden=!s.active;if(!s.active){lastStep=null;return;}
+      host.hidden=!s.active;host.dataset.status=s.status;
+      host.dataset.medium=s.step?.medium||'';host.dataset.step=s.step?.key||'';
+      if(!s.active){lastStep=null;medium.hidden=true;return;}
       const pending=s.status==='preparing',error=s.status==='error',complete=s.status==='complete',paused=s.status==='paused';
       counter.textContent=s.total?'第 '+(s.index+1)+' 站 / '+s.total+' 站':'';
       const value=s.total?Math.round(100*(s.index+s.fraction)/s.total):0;if(progress.value!==value)progress.value=value;
-      if(lastStep!==s.step||!s.step){lastStep=s.step;title.textContent=s.step?.title||(pending?'正在准备路线':error?'巡视路线暂未就绪':'巡视已暂停');subtitle.textContent=textOf(s.step);}
+      if(lastStep!==s.step||!s.step){
+        lastStep=s.step;title.textContent=s.step?.title||(pending?'正在准备路线':error?'巡视路线暂未就绪':'巡视已暂停');subtitle.textContent=textOf(s.step);
+        const name=mediumNames[s.step?.medium]||'';medium.textContent=name;medium.hidden=!name;
+      }
       stage.hidden=!s.step&&!pending&&!error&&!paused;
       play.hidden=complete;play.disabled=pending;play.textContent=paused?'继续巡视':error?'重试':pending?'准备中':'暂停';
       prev.disabled=s.index<=0||pending;next.disabled=!s.total||s.index>=s.total-1||pending;
@@ -235,7 +248,7 @@
     const visibility=()=>{if(document.hidden)controller.interrupt('hidden');};
     document.addEventListener('visibilitychange',visibility);synth?.addEventListener?.('voiceschanged',syncVoices);
     syncVoices();
-    return {...controller,start,destroy(){document.removeEventListener('visibilitychange',visibility);synth?.removeEventListener?.('voiceschanged',syncVoices);controller.destroy();box.remove();}};
+    return {...controller,start,setNarrative,destroy(){document.removeEventListener('visibilitychange',visibility);synth?.removeEventListener?.('voiceschanged',syncVoices);controller.destroy();box.remove();}};
   }
   root.GridPowerTour=Object.freeze({mount,createController,createNarrator});
 })(typeof window==='undefined'?globalThis:window);

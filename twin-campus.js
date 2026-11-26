@@ -335,7 +335,7 @@
         const lanes=clamp(Math.ceil(Math.sqrt(hall.symbols*.52)),1,6),rackCount=Math.ceil(hall.symbols/lanes);
         const rowD=(d-20)/rackCount,laneW=(w-3.4)/lanes,rackW=Math.min(laneW*.60,2.8);
         const demoLane=Math.floor((lanes-1)/2),demoRow=Math.min(rackCount-1,Math.floor(rackCount*.55));
-        let demo=null;hall.rackPoints=[];hall.rowSources=[];
+        let demo=null,waterRack=null;hall.rackPoints=[];hall.rowSources=[];
         for(let q=0;q<lanes;q++){
           const xx=x+1.7+q*laneW;
           m.part(3,b);m.group('it');
@@ -358,6 +358,9 @@
               hall.rowSources[q]={pos:m.world([dx+ww*.5,dy+dd*.55,bz+3.2])};
             }
             if(q===demoLane&&j===demoRow){mark('rack',at);hall.rackType=style?profile:null;hall.demoRackIndex=id;demo={xx,yy,depth:rackD,id};}
+            const rackProfile=profile||project.rackStudy?.profile||'gb200';
+            if(config.cooling!=='风冷'&&['gb200','gb300'].includes(rackProfile)&&(!waterRack||id===demo?.id))
+              waterRack={xx,yy,depth:rackD,id,profile:rackProfile};
             m.part(4,b,id);m.group(rackKey);
             box(xx,yy,floor+.96,rackW,rackD,3.15,'#2e4959','#6c858e');
             box(xx+.15,yy-.02,floor+2.98,rackW-.3,.09,.12,'#63c4c5');
@@ -402,9 +405,38 @@
         if(config.cooling!=='风冷')cells.push(['liquid',10.05,15.55,6.6,5.15]);
         for(const [key,px,py,bw,bd] of cells){
           m.group(key);
-          if(key===(config.cooling==='风冷'?'air':'liquid')){
-            hall.facilityWater=[-.30,.30].map(delta=>m.world([px+bw*.50+delta,py+bd+.12,z+2.05]));
-            for(const delta of [-.30,.30])beam([px+bw*.50+delta,py+bd,z+2.05],[px+bw*.50+delta,py+bd+.12,z+2.05],.13,'#7faaa8',6);
+          if(key===(waterRack?'liquid':'air')){
+            const rear=py+bd,mid=px+bw*.50;
+            const sockets=[-.30,.30].map(delta=>[mid+delta,rear+.12,z+2.05]);
+            hall.facilityWater=sockets.map(m.world);
+            for(const socket of sockets)beam([socket[0],rear,socket[2]],socket,.13,'#7faaa8',6);
+            // Each captured centerline also produces the colored pipe in this equipment's mesh.
+            function waterPipe(points,radius,tone){
+              for(let k=1;k<points.length;k++)beam(points[k-1],points[k],radius,tone,8);
+              return points.map(m.world);
+            }
+            if(key==='liquid'){
+              const a=mid-.48,b=mid+.48,level=z+3.76,cold='#54ada9',warm='#ae86aa';
+              const primaryY=rear-.50,secondaryY=rear-.92;
+              const primaryCold=[a,primaryY,level],secondaryCold=[a,secondaryY,level];
+              const primaryWarm=[b,primaryY,level],secondaryWarm=[b,secondaryY,level];
+              // Two hydraulically separate channels cross the plate bank on either side of its plates.
+              for(let j=0;j<8;j++)box(a-.12+j*.15,secondaryY-.14,level-.24,.052,.70,.43,'#a69171','#d6c39b');
+              waterPipe([primaryCold,primaryWarm],.080,cold);
+              waterPipe([secondaryWarm,secondaryCold],.080,warm);
+              hall.coolingPaths={
+                rackIndex:waterRack.id,profile:waterRack.profile,
+                primarySupply:waterPipe([sockets[0],[a,rear+.12,sockets[0][2]],[a,rear+.12,level],primaryCold],.10,cold),
+                primaryReturn:waterPipe([primaryWarm,[b,rear+.12,level],[b,rear+.12,sockets[1][2]],sockets[1]],.10,warm),
+                secondaryCold,secondaryWarm
+              };
+            }else{
+              // The facility water passes through the CRAH coil, then returns to the same outdoor unit.
+              const x0=px+.58,x1=px+bw-.58,face=rear+.30,portZ=sockets[0][2],low=portZ-.45;
+              hall.coilWater=waterPipe([sockets[0],[sockets[0][0],rear+.12,portZ+.80],[x0,rear+.12,portZ+.80],
+                [x0,face,portZ+.80],[x1,face,portZ+.80],[x1,face,portZ+.32],[x0,face,portZ+.32],
+                [x0,face,low],[x1,face,low],[x1,rear+.12,low],[sockets[1][0],rear+.12,low],sockets[1]],.074,'#b39c7c');
+            }
           }
           box(px-.16,py-.16,z+.16,bw+.32,bd+.32,.36,'#607178','#a1aeae');
           if(key==='transformer'){
@@ -566,10 +598,16 @@
           m.trace([[entry,rear+.100,rTop-1.4],[entry,rear+.47,rTop-1.4],[rx+rackW+.10,rear+.47,rTop-1.4],[rx+rackW+.10,netY,rTop-1.4],[rx+rackW+.10,netY,rTop+.34],[rx+rackW-.05,netY,rTop+.34]],14,.075,'#adb0cd');
           m.trace([[rx+.21,netY,rTop+.55],[rx+.21,netY,tHigh+.52],[dataX,netY,tHigh+.52],[dataX,opticY+.9,tHigh+.52],[opticX+1.05,opticY+.9,tHigh+.52],[opticX+1.05,opticY+.9,z+4.28]],13,.13,'#a78acc');
           // Liquid lines run on a third offset, with separate supply and return terminations at the rack manifold.
-          const serviceX=rx+rackW+.93,tz=tHigh-.8;
-          if(config.cooling!=='风冷'){
-            m.trace([[12,19.4,z+3.49],[12,19.4,tz],[9.2,19.4,tz],[9.2,6.75,tz],[serviceX,6.75,tz],[serviceX,rear+.55,tz],[serviceX,rear+.55,rTop-.55],[rx+rackW+.01,rear+.55,rTop-.55]],10,.14,'#54ada9');
-            m.trace([[rx+rackW+.01,rear+.87,rTop-.82],[serviceX+.27,rear+.87,rTop-.82],[serviceX+.27,rear+.87,tz],[serviceX+.27,7.10,tz],[9.6,7.10,tz],[9.6,18.8,tz],[12.9,18.8,tz],[12.9,18.8,z+3.51]],12,.14,'#ae86aa');
+          if(waterRack){
+            const path=hall.coolingPaths,cold=path.secondaryCold,warm=path.secondaryWarm;
+            const edge=waterRack.xx+rackW,back=waterRack.yy+waterRack.depth,serviceX=edge+.93,tz=tHigh-.8;
+            const supply=[cold,[cold[0],cold[1],tz],[9.2,cold[1],tz],[9.2,6.75,tz],[serviceX,6.75,tz],
+              [serviceX,back+.55,tz],[serviceX,back+.55,rTop-.55],[edge+.01,back+.55,rTop-.55]];
+            const backflow=[[edge+.01,back+.87,rTop-.82],[serviceX+.27,back+.87,rTop-.82],[serviceX+.27,back+.87,tz],
+              [serviceX+.27,7.10,tz],[9.6,7.10,tz],[9.6,warm[1],tz],[warm[0],warm[1],tz],warm];
+            m.trace(supply,10,.14,'#54ada9');m.trace(backflow,12,.14,'#ae86aa');
+            path.supply=supply.map(m.world);path.return=backflow.map(m.world);
+            delete path.secondaryCold;delete path.secondaryWarm;
           }
           // Air travels through the supply plenum then the adjacent cold aisle to the representative rack intake.
           const low=z+.41,aisle=rx-.39;
@@ -638,16 +676,17 @@
     for(let side=0;side<2;side++){
       const kind=side?'return':'supply',tone=side?'#ae92a2':'#78aaa9',hx=27.47+side*.57,z=1.29+side*.36;
       const header=[hx,-5.33-side*.62,z];headers.push(header);
-      utility('plant-'+kind,kind,[[hx,-33+chD+.52+side*.45,z],header],.16,tone);
+      const rowTees=[0,1].map(row=>[hx,(-33+row*13)+chD+.52+side*.45,z]);
+      utility('plant-'+kind,kind,[...rowTees,header],.16,tone);
       for(let row=0;row<2;row++){
         const y=-33+row*13,front=y+chD,manifold=front+.52+side*.45;
-        const end=29+(chillCount-1)*(chW+1.1)+chW*.40+side*.36;
-        utility('header-'+kind+'-'+row,kind,[[hx,manifold,z],[end,manifold,z]],.13,tone);
+        const taps=Array.from({length:chillCount},(_,j)=>[29+j*(chW+1.1)+chW*.40+side*.36,manifold,z]);
+        utility('header-'+kind+'-'+row,kind,[rowTees[row],...taps],.13,tone);
         for(let j=0;j<chillCount;j++){
-          const branchX=29+j*(chW+1.1)+chW*.40+side*.36;
+          const branchX=taps[j][0];
           const key='cooling-unit-'+(row*chillCount+j+1),port=[branchX,front,z];
           m.group(key);coolingParts[key][kind]=port;
-          utility('chiller-port-'+kind+'-'+row+'-'+j,kind,[[branchX,manifold,z],port],.087,tone);
+          utility('chiller-port-'+kind+'-'+row+'-'+j,kind,[taps[j],port],.087,tone);
           beam(port,[branchX,front+.09,z],.145,tone,10);
         }
         m.group('cooling');
@@ -689,19 +728,21 @@
       const kind=side?'return':'supply',tone=side?'#a88d9d':'#6d9c9a',head=headers[side];
       const y=head[1],depth=-.78,west=19.72+side*.55,frontY=24.76+side*.48,z=.71+side*.31;
       const destinations=plan.dims.map(h=>h.facilityWater[side]);
-      const trunk=[[head[0],y,head[2]],[27.43,y,depth],[20.57,y,depth],[west,y,z],[west,frontY,z],[Math.min(...destinations.map(p=>p[0])),frontY,z]];
+      const tees=destinations.map(dst=>[dst[0],frontY,z]);
+      const trunk=[head,[27.43,y,depth],[20.57,y,depth],[west,y,z],[west,frontY,z],...tees.slice().sort((a,b)=>b[0]-a[0])];
       utility('facility-'+kind,kind,trunk,.105,tone,true);routes.push({points:trunk,color:side?'#d8abba':'#86efe0'});
       for(let i=0;i<halls;i++){
         const hall=plan.dims[i],dst=destinations[i],edgeY=hall.y+hall.d+.15;
         const branchR=Math.min(.095,Math.abs(hall.facilityWater[1][0]-hall.facilityWater[0][0])*.32);
-        const outdoor=[[dst[0],frontY,z],[dst[0],edgeY,z],[dst[0],edgeY,dst[2]]];
+        const outdoor=[tees[i],[dst[0],edgeY,z],[dst[0],edgeY,dst[2]]];
         utility('hall-water-'+kind+'-'+i,kind,outdoor,branchR,tone,true);
-        m.part(3,i);m.group(config.cooling==='风冷'?'air':'liquid');
+        m.part(3,i);m.group(hall.coolingPaths?'liquid':'air');
         utility('hall-water-port-'+kind+'-'+i,kind,[outdoor.at(-1),dst],branchR,tone,true);
         m.part(0);m.group('none');
       }
     }
     const model={plan,layout,coolingBounds,coolingParts,vertices:new Float32Array(m.buffer),faces:m.faces,anchors,routes};
+    model.getCoolingTour=(options={},openIndex=0)=>GridCoolingRoute.plan(model,options,openIndex);
     model.getPowerTour=(options={},openIndex=0)=>{
       const index=clamp(Number.isInteger(openIndex)?openIndex:0,0,halls-1),hall=plan.dims[index],p=hall.powerPaths;
       const branchIndex=clamp(Math.trunc(Number(options.yardUnit)||1)-1,0,yard.transformers.length-1);
@@ -738,7 +779,7 @@
     model.getRackRig=(rig,apply=true)=>{
       if(!rig||!Number.isInteger(rig.hallIndex)||!Number.isInteger(rig.rackIndex)||!rig.topology)return null;
       const hall=plan.dims[rig.hallIndex],rack=hall?.rackPoints[rig.rackIndex];if(!rack)return null;
-      const t=rig.topology,signature=[rig.hallIndex,rig.rackIndex,t.id,t.profile,t.architecture,t.modules?.length,t.servers?.length,t.perServer,rig.boardServerId||''].join('/');
+      const t=rig.topology,signature=[rig.hallIndex,rig.rackIndex,t.id,t.profile,t.architecture,t.modules?.length,t.servers?.length,t.perServer,rig.boardServerId||'',Boolean(rig.cooling)].join('/');
       let entry=rigCache.get(signature);
       if(!entry){
         entry=buildRackRig(hall,rack,rig);
@@ -921,7 +962,7 @@
     const source=hall.rowSources[rack.rowIndex]?.pos||hall.points.rowdist;
     if(source)anchors[t.rowdist.id]=source;
     item(t.rowdist);
-    const boardEdges=board?t.boardEdges.filter(e=>e.from===board):[];
+    const boardEdges=board&&!request.cooling?t.boardEdges.filter(e=>e.from===board):[];
     for(const e of [...t.edges,...boardEdges]){
       const from=lookup.get(e.from),to=lookup.get(e.to);if(!from||!to)continue;
       if(from.kind==='rowdist'&&to.kind==='pdu'&&source){
@@ -954,12 +995,88 @@
         wire(e,[src,[.37,src[1],src[2]],[.37,lane,plane],[x,lane,plane],[x,dst[1],plane],[x,dst[1],regZ],[x+.17,dst[1],regZ],[dst[0],dst[1],regZ],dst],.035,'#d6a76d');
       }
     }
+    // In the unfolded inspection view the tray hoses remain attached to their modeled
+    // quick couplings. The tour reads the very same centerlines used to emit each tube.
+    function buildCoolingBranch(){
+      const feed=hall.coolingPaths,server=servers.find(s=>s.id===board);
+      if(!request.cooling||pcie||!server||feed?.rackIndex!==id||!feed.supply?.length||!feed.return?.length)return null;
+      const chips=t.gpus.filter(g=>g.serverId===server.id),partById=new Map(),branches={};
+      const cold='#4fbab9',warm='#c483aa',brass='#ba9270';
+      const local=p=>[(p[0]-xf.dx)/xf.sx,(p[1]-xf.dy)/xf.sy,(p[2]-xf.oz)/xf.sz];
+      const worldPath=points=>points.map(m.world);
+      function tube(n,points,r,tone){
+        item(n);
+        for(let i=1;i<points.length;i++){
+          if(Math.hypot(...difference(points[i],points[i-1]))>1e-7)beam(points[i-1],points[i],r,tone,8);
+        }
+        return worldPath(points);
+      }
+      function fitting(owner,suffix,label,medium,key,anchor){
+        const n={id:owner.id+'-'+suffix,kind:'coolant',label,medium,key,serverId:server.id};
+        partById.set(n.id,n);put(n,anchor);return n;
+      }
+      const bottom=low+server.index*unitH,deck=gpuLocations[chips[0].id][2]+.15;
+      const tapS=[10.25,6.91,bottom+.24],tapR=[10.79,7.49,bottom+.44];
+      const atS=local(feed.supply.at(-1)),atR=local(feed.return[0]);
+      const manifoldS=fitting(t,'MS','供液歧管','supply','rack',tapS);
+      const manifoldR=fitting(t,'MR','回液歧管','return','rack',tapR);
+      function manifold(port,tap,n,tone,isReturn){
+        const top=[tap[0],tap[1],Math.max(17.25,port[2])],elbow=[top[0],port[1],top[2]];
+        const leg=[port,[port[0],port[1],top[2]],elbow,top,tap];
+        const path=tube(n,isReturn?leg.reverse():leg,.125,tone);
+        tube(n,[tap,[tap[0],tap[1],.80]],.125,tone);
+        for(const tray of servers){
+          const z=low+tray.index*unitH+(isReturn?.44:.24);
+          beam([tap[0]-.24,tap[1],z],[tap[0],tap[1],z],.105,'#98aaad',8);
+        }
+        return path;
+      }
+      const rackSupply=manifold(atS,tapS,manifoldS,cold,false),rackReturn=manifold(atR,tapR,manifoldR,warm,true);
+      const qS=[.31,6.95,deck],qR=[.31,.98,deck+.06];
+      const boardS=[-.40,6.18,deck],boardR=[-.40,1.74,deck+.06];
+      const hoseS=fitting(server,'QS','托盘供液快接','supply','server',qS);
+      const hoseR=fitting(server,'QR','托盘回液快接','return','server',qR);
+      const traySupply=tube(hoseS,[tapS,[9.95,6.91,tapS[2]],[9.29,6.95,deck],[2.03,6.95,deck],qS,[-.11,6.95,deck],boardS],.079,cold);
+      const trayReturn=tube(hoseR,[boardR,[-.11,.98,qR[2]],qR,[8.92,.98,qR[2]],[9.23,1.36,qR[2]],[9.23,7.49,tapR[2]],tapR],.079,warm);
+      for(const [n,p] of [[hoseS,qS],[hoseR,qR]]){
+        item(n);beam([p[0]-.13,p[1],p[2]],[p[0]+.13,p[1],p[2]],.13,'#afbbb4',8);
+        beam([p[0]-.07,p[1],p[2]],[p[0]+.02,p[1],p[2]],.145,brass,8);
+      }
+      // Two separate common headers have one tee per plate. Take only the prefix
+      // ending at that plate, so a branch never detours to a neighboring GPU.
+      const positions=chips.map(g=>{const [x,y]=gpuLocations[g.id],row=g.index%2;
+        return {g,x,y,sx:x-.68-.15*row,rx:x+.61+.15*row};});
+      function header(start,n,axis,tone){
+        const tees=[start,...positions.map(p=>[p[axis],start[1],start[2]]).sort((a,b)=>b[0]-a[0])];
+        tube(n,tees,.065,tone);
+        return x=>tees.slice(0,tees.findIndex(p=>p[0]===x)+1);
+      }
+      const supplyTee=header(boardS,hoseS,'sx',cold),returnTee=header(boardR,hoseR,'rx',warm);
+      for(const {g,x,y,sx,rx} of positions){
+        const z=gpuLocations[g.id][2],channel=z+.105;
+        const plate=fitting(g,'CP',g.label+' 冷板','supply','gpu',[x,y,channel]);
+        plate.gpuNumber=g.number;
+        item(plate);
+        box(x-.45,y-.42,z,.90,.84,.072,'#aa7550','#c99d70');
+        for(const edgeY of [y-.405,y+.37])box(x-.43,edgeY,z+.072,.86,.035,.084,'#a48265','#ccb18c');
+        for(const dx of [-.375,.375])for(const dy of [-.315,.315])
+          m.cylinder(x+dx,y+dy,z+.072,.034,.045,'#75888e','#c1ceca',8);
+        const mid=[x,y,channel],sTee=supplyTee(sx),rTee=returnTee(rx);
+        const supply=[[sx,boardS[1],deck],[sx,y+.21,deck],[x-.40,y+.21,channel],[x+.22,y+.21,channel],[x+.22,y,channel],mid];
+        const ret=[mid,[x-.22,y,channel],[x-.22,y-.21,channel],[x+.40,y-.21,channel],[rx,y-.21,boardR[2]],[rx,boardR[1],boardR[2]]];
+        tube(plate,supply,.044,cold);tube(plate,ret,.044,warm);
+        branches[g.id]={plate,chipSupply:worldPath([...sTee,...supply.slice(1)]),
+          chipReturn:worldPath([...ret,...rTee.slice(0,-1).reverse()])};
+      }
+      return {manifoldS,manifoldR,hoseS,hoseR,rackSupply,traySupply,trayReturn,rackReturn,branches,partById};
+    }
+    const cooling=buildCoolingBranch();
     const laneCount=hall.rackPoints.findIndex(p=>p.rowIndex===1),perLane=laneCount===-1?hall.rackPoints.length:laneCount;
     const first=hall.rackPoints[0].pos,nextLane=hall.rackPoints[perLane]?.pos||first,nextColumn=perLane>1?hall.rackPoints[1].pos:first;
     const grid=[first[0],first[1],nextLane[0]-first[0],nextColumn[1]-first[1]];
     const extractionVector=[-size[0]*.54,0,0],palette=new Uint8Array(256*4);
     let priorPath,priorStep;
-    const geometry={vertices:new Float32Array(m.buffer),faces:m.faces,assets,anchors,edgePoints,boardBounds,center,size,grid,perLane,frontYaw:-Math.PI/2,hinge:hinges[0],hinges,
+    const geometry={vertices:new Float32Array(m.buffer),faces:m.faces,assets,anchors,edgePoints,cooling,boardBounds,center,size,grid,perLane,frontYaw:-Math.PI/2,hinge:hinges[0],hinges,
       extractionVector,selectedIndex:0,selectedId:null,ownerRow:rack.rowIndex,rowRole:0,rowLocal:map.get(t.rowdist.id),doorId:doorNode.id,palette,stateVersion:0,
       updateState(rig){
         if(geometry.stateVersion&&priorPath===rig.highlight&&priorStep===rig.highlightStep&&geometry.selectedId===rig.selectedId)return;
@@ -1492,16 +1609,41 @@
       tourPlan={...hall,stops,cabinet};tourModel=model;
       return stops;
     }
+    function prepareCoolingTour(settings={}){
+      if(dirty||!model)rebuild();
+      const hall=model.getCoolingTour(settings,openIndex);
+      if(!hall)return [];
+      let cabinet=null;
+      if(hall.liquid){
+        const branch={hallIndex:hall.hallIndex,rackIndex:hall.rackIndex};
+        cabinet=rackView.getCoolingJourneyPlan({...branch,serverNumber:settings.serverNumber,gpuNumber:settings.gpuNumber})||rackView.getCoolingJourneyPlan(branch);
+        if(!cabinet)return [];
+      }
+      const stops=[...hall.outbound,...(cabinet?.stops||[]),...hall.inbound];
+      // Reject a disconnected branch instead of animating across a gap between two pipes.
+      if(!stops.length||stops.some((s,i)=>{
+        if(!s.points?.length||!s.points.every(p=>p.length===3&&p.every(Number.isFinite)))return true;
+        return i>0&&Math.hypot(...difference(s.points[0],stops[i-1].points.at(-1)))>1e-4;
+      }))return [];
+      tourPlan={...hall,kind:'cooling',stops,cabinet};tourModel=model;
+      return stops;
+    }
     function setTourStop(step){
       if(dirty)rebuild();
-      if(!tourPlan||model!==tourModel)return false;
+      if(!tourPlan||model!==tourModel||!tourPlan.stops.includes(step))return false;
       if(layoutView)setLayoutView(false);
       cancelTravel();cancelPendingMove();queuedRack=null;rackView.cancelTour();
       if(openIndex!==tourPlan.hallIndex){rackView.clear();openIndex=tourPlan.hallIndex;cuts.fill(0);}
       if(step.scope==='rack'){
         const {slot,serverNumber,gpuNumber}=tourPlan.cabinet;
-        if(!rackView.prepareJourney({hallIndex:openIndex,rackIndex:tourPlan.rackIndex,slot,serverNumber,gpuNumber}))return false;
-        rackView.setJourneyStep(step.key);rackView.cancelTour();
+        const branch={hallIndex:openIndex,rackIndex:tourPlan.rackIndex,serverNumber,gpuNumber};
+        if(tourPlan.kind==='cooling'){
+          if(!rackView.prepareCoolingJourney(branch)||!rackView.setCoolingStep(step))return false;
+        }else{
+          if(!rackView.prepareJourney({...branch,slot}))return false;
+          rackView.setJourneyStep(step.key);
+        }
+        rackView.cancelTour();
       }else if(rackView.rig)rackView.clear();
       cancelTravel();
       focusKey=null;focusSignature='';returnView=null;lastPick=null;
@@ -1517,7 +1659,8 @@
       const w=wrapper.clientWidth||800,h=wrapper.clientHeight||420;
       const base=Math.min(w/190,h/Math.max(107,15+165*Math.sin(tilt)));
       const rackHeight=rig?rig.size[2]:1;
-      const span=rig?rackHeight*({pdu:1.72,psu:.72,bus:.92,server:.67,gpu:.54}[step.key]||1):
+      const cooling=Boolean(step.medium);
+      const span=rig?rackHeight*({pdu:1.72,psu:.72,bus:.92,server:.67,gpu:cooling?.40:.54}[step.key]||1):
         step.scope==='yard'?20:step.key==='switchgear'?25:14;
       return {yaw:angle,pitch:tilt,zoom:clamp(Math.min(w*.78,h*.96)/(span*base),.7,820)};
     }
@@ -1526,6 +1669,9 @@
       return tourCamera.play(request,tourView(request.step));
     }
     function inspectTourLoad(step){
+      if(tourPlan?.kind==='cooling'&&step.scope==='hall'&&step.key==='rack'&&tourPlan.stops.includes(step)){
+        step=tourPlan.cabinet.stops[0];
+      }
       if(!setTourStop(step))return false;
       const target=step.points.at(-1),v=tourView(step);
       wanted={yaw:shortestAngle(yaw,v.yaw),pitch:v.pitch,zoom:v.zoom,fx:target[0],fy:target[1],fz:target[2]};
@@ -1921,7 +2067,8 @@
       }else{
         yaw=approach(yaw,wanted.yaw,t);pitch=approach(pitch,wanted.pitch,t);zoom=approach(zoom,wanted.zoom,t);fx=approach(fx,wanted.fx,t);fy=approach(fy,wanted.fy,t);fz=approach(fz,wanted.fz,t);
       }
-      const zoneSelection=focusKey?null:selected;
+      const followingWater=Boolean(tourCamera.medium);
+      const zoneSelection=focusKey||followingWater?null:selected;
       for(let i=0;i<3;i++)highlight[i]=approach(highlight[i],zoneSelection===zones[i+1]?1:0,reduce?1:t);
       const raw=Number(project.config?.load??80),load=Number.isFinite(raw)?clamp(raw/100,0,1):0;
       const moving=playing&&!reduce&&load>0;if(moving)activeTime=(activeTime+dt*(.23+.94*load))%86400;
@@ -1932,8 +2079,9 @@
       }
       const ca=Math.cos(yaw),sa=Math.sin(yaw),sp=Math.sin(pitch),cp=Math.cos(pitch);
       const scale=Math.min(width/190,height/Math.max(107,15+165*sp))*zoom;
-      const waterFocus=focusKey==='liquid'||focusKey?.startsWith('cooling-unit-');
-      cam={width,height,cx:width*.5-(fx*ca-fy*sa)*scale,cy:height*.535-((fx*sa+fy*ca)*sp-fz*cp)*scale,scale,ca,sa,sp,cp,cut,time:activeTime,load,highlight,cuts,aim,rig:rackView.rig,circuit:circuitIds[circuit],observing:!focusKey?0:waterFocus?2:focusKey==='air'||focusKey==='fan'?3:focusKey==='network'?4:focusKey.startsWith('sub-')||focusKey.startsWith('rack')?5:1};
+      const waterFocus=followingWater||focusKey==='liquid'||focusKey?.startsWith('cooling-unit-');
+      const channel=waterFocus?2:!focusKey?0:focusKey==='air'||focusKey==='fan'?3:focusKey==='network'?4:focusKey.startsWith('sub-')||focusKey.startsWith('rack')?5:1;
+      cam={width,height,cx:width*.5-(fx*ca-fy*sa)*scale,cy:height*.535-((fx*sa+fy*ca)*sp-fz*cp)*scale,scale,ca,sa,sp,cp,cut,time:activeTime,load,highlight,cuts,aim,rig:rackView.rig,circuit:followingWater?circuitIds.liquid:circuitIds[circuit],observing:channel};
       const bgKey=[width,height,scale.toFixed(4),yaw.toFixed(4),pitch.toFixed(4),cam.cx.toFixed(2),cam.cy.toFixed(2)].join(',');
       if(bgKey!==groundKey){drawGround(ground,cam);groundKey=bgKey;}
       renderer.draw(cam,selected);
@@ -2018,7 +2166,7 @@
       openRack,closeRack:rackView.leave,selectRackSlot:rackView.selectSlot,toggleRackView:rackView.toggleView,
       toggleRackDoor:rackView.toggleDoor,toggleRackExtract:rackView.toggleExtract,focusRackStep:rackView.focusStep,
       focusEquipment,moveToEquipment,getEquipmentProjection,getCoolingPartProjection,clearEquipmentFocus,getViewState,restoreViewState,
-      preparePowerTour,followPowerTour,inspectTourLoad,haltPowerTour(clear=false){tourCamera.halt(clear);},
+      preparePowerTour,prepareCoolingTour,followPowerTour,inspectTourLoad,haltPowerTour(clear=false){tourCamera.halt(clear);},
       setSelected(key){select(key,false);},zoomBy,reset,resize:requestDraw,
       destroy(){disposed=true;tourCamera.destroy();cancelPendingMove();rackView.clear();cancelTravel();clearTimeout(delayed);intersection?.disconnect();media.removeEventListener?.('change',motionChanged);document.removeEventListener('visibilitychange',visibilityChanged);if(observer)observer.disconnect();else window.removeEventListener('resize',requestDraw);cancelAnimationFrame(scheduled);renderer.dispose();zoneDock.remove();wrapper.remove();}};
   }

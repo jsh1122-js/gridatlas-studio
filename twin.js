@@ -25,22 +25,23 @@
     let observing=null,rackState=null,watchRevision=0,observationConfig='',previewing=null,closeView=false,yardUnit=1,coolingUnit=1,layoutActive=false,paintingPanel=false;
     const outside=key=>key.startsWith('sub-')||key.startsWith('cooling-unit-');
     const visual=document.querySelector('.tw-visual');
-    let tourConfig='';
+    const coolingPicker=$('cooling-picker'),unitSelect=$('cooling-start-unit'),coolingInspect=$('cooling-inspect');
+    let tourConfig='',tourKind='power',tourOrigin=1,tourBranch={};
     const geometryConfig=p=>JSON.stringify([p.id,p.config.architecture,p.config.cooling,p.config.it,p.config.pue,p.config.density,p.spacePlan,p.rackStudy,p.rackMix]);
     const tour=GridPowerTour.mount($('power-tour'),{
       onPrepare:()=>{
-        const branch={slot:rackState?.slotId||1,serverNumber:rackState?.serverNumber,gpuNumber:rackState?.gpuNumber};
         tourConfig=geometryConfig(project);
         if(observing)clearObservation(false);
         if(mode!=='campus')changeMode('campus');
-        return campus?.preparePowerTour({yardUnit,...branch})||[];
+        if(tourKind==='cooling')return campus?.prepareCoolingTour({coolingUnit:tourOrigin,...tourBranch})||[];
+        return campus?.preparePowerTour(tourBranch)||[];
       },
       onTravel:request=>{
         if(observing)clearObservation(false);
         const room=request.step.scope!=='yard';
         if(mode!==(room?'cutaway':'campus'))changeMode(room?'cutaway':'campus');
         visual.classList.add('tw-following');
-        $('scene-source').textContent='亮线沿本方案建模导体行进，设备内部的虚线表示能量变换';
+        $('scene-source').textContent=tourKind==='cooling'?'点设备可暂停细看，继续巡视会回到原来的管段':'亮线沿本方案建模导体行进，设备内部的虚线表示能量变换';
         return campus.followPowerTour(request);
       },
       onHalt:({reason})=>{
@@ -63,7 +64,7 @@
     }
     function inspectTourStop(step){
       stopForInspection();
-      if(step.scope==='rack'){
+      if(step.scope==='rack'||(step.medium==='supply'&&step.key==='rack')){
         if(mode!=='cutaway')changeMode('cutaway');
         campus?.inspectTourLoad(step);
       }else if(step.key==='hall-entry'){
@@ -71,12 +72,52 @@
       }else observe(step.key);
     }
     function userInteracted(event){
-      if(event.target.closest('#tw-power-tour,#tw-tour-open,.tw-tour-pin,#tw-expand'))return;
+      if(event.target.closest('#tw-power-tour,#tw-tour-open,#tw-cooling-tour-open,#tw-device-cooling-tour,#tw-cooling-picker,.tw-tour-pin,#tw-expand'))return;
+      // A canvas pick runs on pointerup. The subsequent compatibility click
+      // belongs to that same gesture and must not pause a newly started tour.
+      if(event.type==='click'&&event.detail>0)return;
       if(event.type==='keydown'&&!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','+','-','=','Home','Escape','Enter',' '].includes(event.key))return;
       stopForInspection();
     }
     for(const type of ['pointerdown','click','keydown','wheel'])visual.addEventListener(type,userInteracted,{capture:true,passive:true});
-    $('tour-open').onclick=()=>tour.start({speakIfAvailable:true});
+    function endChoosing(){
+      coolingPicker.hidden=true;$('cooling-tour-open').setAttribute('aria-expanded','false');
+    }
+    function chooseCoolingOrigin(hint){
+      if(tour.getState().active)tour.close();
+      if(observing)clearObservation();
+      changeMode('campus');
+      if(!layoutActive)campus?.reset();
+      const count=GridCampus.coolingUnitCount(project.config);
+      unitSelect.replaceChildren(new Option('选择机组',''),...Array.from({length:count},(_,i)=>
+        new Option('室外冷却机组 '+String(i+1).padStart(2,'0'),String(i+1))));
+      coolingPicker.querySelector('label').textContent=hint||'点一台室外机组开始讲解，也可按编号选择';
+      coolingPicker.hidden=false;$('cooling-tour-open').setAttribute('aria-expanded','true');
+    }
+    function startTour(kind,unit,speakIfAvailable){
+      const state=tour.getState();
+      if(kind==='cooling'&&(!Number.isInteger(unit)||unit<1||unit>GridCampus.coolingUnitCount(project.config))){
+        chooseCoolingOrigin('当前方案没有该编号，请选择一台已建模的室外机组');
+        return;
+      }
+      endChoosing();
+      if(state.active&&(kind!==tourKind||kind==='cooling'&&unit!==tourOrigin))tour.close();
+      if(!tour.getState().active||state.status==='complete'||state.status==='error'){
+        tourKind=kind;tourOrigin=unit;
+        tourBranch={yardUnit,slot:rackState?.slotId||1,serverNumber:rackState?.serverNumber,gpuNumber:rackState?.gpuNumber};
+        if(kind==='cooling')coolingUnit=unit;
+        tour.setNarrative(kind,kind==='cooling'?'室外机组 '+String(unit).padStart(2,'0'):'');
+      }
+      return tour.start({speakIfAvailable});
+    }
+    $('tour-open').onclick=()=>startTour('power',null,true);
+    $('cooling-tour-open').onclick=()=>{
+      if(!coolingPicker.hidden){endChoosing();return;}
+      if(observing?.key.startsWith('cooling-unit-'))startTour('cooling',observing.coolingUnit,true);
+      else chooseCoolingOrigin();
+    };
+    $('cooling-pick-cancel').onclick=()=>{endChoosing();$('cooling-tour-open').focus({preventScroll:true});};
+    unitSelect.onchange=()=>{if(unitSelect.value)startTour('cooling',Number(unitSelect.value),true);};
     function showLayout(on){
       layoutActive=on;$('layout').setAttribute('aria-pressed',String(on));
       modeButtons.find(b=>b.dataset.twinMode==='campus').setAttribute('aria-pressed',String(!on&&mode==='campus'));
@@ -91,6 +132,7 @@
     $('layout').onclick=()=>layoutActive?campus?.setLayoutView(false):openLayout();
     const overlay=GridDeviceOverlay.mount($('device-ink'),key=>observe(key),showCoolingParts);
     const panel=GridDeviceLinks.mount($('device-panel'),{
+      onCoolingTour:unit=>startTour('cooling',unit,true),
       onSelect:key=>observe(key),onBack:()=>{
         if(observing){
           const yard=outside(observing.key);
@@ -188,6 +230,9 @@
       if(tour.getState().active)stopForInspection();
       const k=input.split('/')[0];
       const key=GridDeviceLinks.resolveSceneKey(k==='power'?'sub-transformer':k,configForDevice());
+      if(!coolingPicker.hidden&&key.startsWith('cooling-unit-')){
+        startTour('cooling',Number(key.slice(13)),true);return;
+      }
       const unit=/^sub-transformer(?:-([2-4]))?$/.exec(key);
       if(unit)yardUnit=Number(unit[1]||1);
       const plant=/^cooling-unit-(\d+)$/.exec(key);if(plant)coolingUnit=Number(plant[1]);
@@ -204,11 +249,19 @@
     }
     function syncRack(state){
       const previous=rackState;rackState=state;
-      guideHost.hidden=!state;visual.classList.toggle('tw-rack-active',Boolean(state));
-      guide.update(state);
+      const cooling=Boolean(state?.cooling),stop=state?.coolingStop;
+      guideHost.hidden=!state||cooling;visual.classList.toggle('tw-rack-active',Boolean(state));
+      guide.update(cooling?null:state);
+      coolingInspect.hidden=!cooling||!stop;
+      if(!coolingInspect.hidden){
+        coolingInspect.querySelector('h3').textContent=stop.title;
+        coolingInspect.querySelector('code').textContent=stop.nodeId||'';
+        coolingInspect.querySelector('p').textContent=stop.text;
+      }
       if(state){
         if(observing)clearObservation(false);
-        if(!previous||Boolean(previous.slotId)!==Boolean(state.slotId))panel.update(state.slotId?'psu':'rack',configForDevice());
+        if(cooling)panel.clear();
+        else if(!previous||previous.cooling||Boolean(previous.slotId)!==Boolean(state.slotId))panel.update(state.slotId?'psu':'rack',configForDevice());
       }else if(!observing)panel.clear();
     }
     function inspectTarget(key){
@@ -291,6 +344,7 @@
     }
     function changeMode(nextMode,keepObservation=false) {
       if (mode !== nextMode) {
+        if(nextMode!=='campus')endChoosing();
         if(layoutActive)campus?.setLayoutView(false);
         if(nextMode==='territory'&&tour.getState().active)tour.close();
         if(observing&&!keepObservation)clearObservation();
@@ -403,7 +457,13 @@
     });
     let beforeInspection;
     return {
-      observe,openLayout,startPowerTour:()=>tour.start(),getShareHash(){return observing?'#twin/device/'+observing.key:tour.getState().active?'#twin/tour':layoutActive?'#twin/layout':rackState?'#twin/rack':'#twin';},
+      observe,openLayout,startPowerTour:()=>startTour('power',null,false),
+      startCoolingTour:unit=>unit===null?chooseCoolingOrigin():startTour('cooling',unit,false),
+      getShareHash(){
+        if(tour.getState().active&&tourKind==='cooling')return '#twin/cooling-tour/'+tourOrigin;
+        if(!coolingPicker.hidden)return '#twin/cooling-tour';
+        return observing?'#twin/device/'+observing.key:tour.getState().active?'#twin/tour':layoutActive?'#twin/layout':rackState?'#twin/rack':'#twin';
+      },
       openRack() {stopForInspection();if(observing)clearObservation(false);changeMode('cutaway');campus?.openRack();},
       async focusEquipment(key) {
         beforeInspection ??= campus?.getViewState?.();
@@ -417,7 +477,7 @@
       suspendForInspection() { stopForInspection();guide.pause?.();overlay.setPlaying(false);campus?.setPlaying?.(false); territory?.setPlaying?.(false); },
       resumeFromInspection() {
         if(beforeInspection)campus?.restoreViewState?.(beforeInspection);
-        beforeInspection=null;if(rackState)guide.update(rackState);overlay.setPlaying(playing);
+        beforeInspection=null;if(rackState&&!rackState.cooling)guide.update(rackState);overlay.setPlaying(playing);
         campus?.setPlaying?.(playing); territory?.setPlaying?.(playing);
       },
       update(nextProject) {
@@ -425,6 +485,7 @@
         if(tour.getState().active&&tourConfig!==geometryConfig(nextProject))tour.close();
         const projectChanged = project?.id !== nextProject.id;
         project = nextProject;
+        if(!coolingPicker.hidden)chooseCoolingOrigin();
         if(projectChanged&&observing)clearObservation(false);
         metrics = GridDesign.calculate(project.config);
         try {metrics.layout=GridSpacePlan.calculate(project.config,project.rackStudy,project.spacePlan);} catch {metrics.layout=null;}
@@ -446,6 +507,7 @@
         if(observing && JSON.stringify(configForDevice())!==observationConfig)observe(observing.key);
       },
       pause() {
+        endChoosing();
         tour.close();
         if(layoutActive)campus?.setLayoutView(false);
         clearObservation(false);guide.pause?.();active = false; beforeInspection=null;

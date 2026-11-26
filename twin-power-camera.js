@@ -1,4 +1,4 @@
-/* Follow the same 3D centerline that the conductor mesh uses. */
+/* Project the modeled cable or pipe centerline through the live scene camera. */
 (() => {
   'use strict';
   const clamp=(x,lo,hi)=>Math.max(lo,Math.min(hi,x));
@@ -34,7 +34,7 @@
     }
     function halt(clear=false){
       settle(false);
-      if(clear){scene=null;svg.style.display='none';label.hidden=true;delete host.dataset.tourStep;}
+      if(clear){scene=null;svg.style.display='none';label.hidden=true;delete host.dataset.tourStep;delete host.dataset.tourMedium;}
       requestDraw();
     }
     function play({step,fromFraction=0,onProgress,signal,reducedMotion},view){
@@ -42,10 +42,12 @@
       if(signal.aborted||!step.points?.length)return Promise.resolve(false);
       const path=measure(step.points),start=pose(),from=clamp(fromFraction,0,1);
       const target=path.sample(from).point,dist=Math.hypot(target[0]-start.fx,target[1]-start.fy,target[2]-start.fz);
-      const approach=reducedMotion?0:clamp(350+Math.min(280,dist*9)+Math.abs(Math.log(view.zoom/start.zoom))*110,350,1050);
+      const samePose=dist<.001&&Math.abs(Math.log(view.zoom/start.zoom))<.01&&Math.abs(view.pitch-start.pitch)<.01&&Math.cos(view.yaw-start.yaw)>.9999;
+      const approach=reducedMotion||(step.medium&&samePose)?0:clamp(350+Math.min(280,dist*9)+Math.abs(Math.log(view.zoom/start.zoom))*110,350,1050);
       const duration=reducedMotion?0:clamp(1750+Math.sqrt(path.length)*390,1800,5700)*(1-from);
       const desiredYaw=start.yaw+Math.atan2(Math.sin(view.yaw-start.yaw),Math.cos(view.yaw-start.yaw));
       scene={step,path,at:from};host.dataset.tourStep=step.key;svg.style.display='';label.textContent=step.title;
+      if(step.medium)host.dataset.tourMedium=step.medium;
       label.setAttribute('aria-label','停下查看'+step.title);
       const promise=new Promise(resolve=>{
         const cancel=()=>halt(false);
@@ -83,14 +85,14 @@
       for(const n of [ring,dot]){n.setAttribute('cx',p[0]);n.setAttribute('cy',p[1]);}
       label.hidden=end[0]<5||end[0]>cam.width-5||end[1]<5||end[1]>cam.height-6;
       if(!label.hidden){
-        const limit=Math.min(170,cam.width*.66);
+        const limit=Math.min(scene.step.medium?260:170,cam.width*.76);
         label.style.maxWidth=limit+'px';
         const half=Math.min(limit,scene.step.title.length*13+22)/2+4;
         const space=end[1]>cam.height-145?43:0;
         label.style.left=clamp(end[0],half,cam.width-half-space)+'px';label.style.top=clamp(end[1]-23,17,cam.height-17)+'px';
       }
     }
-    return {play,tick,draw,halt,get moving(){return Boolean(motion);},destroy(){halt(true);svg.remove();label.remove();}};
+    return {play,tick,draw,halt,get medium(){return scene?.step.medium;},get moving(){return Boolean(motion);},destroy(){halt(true);svg.remove();label.remove();}};
   }
   window.GridPowerCamera={mount,measure};
 })();

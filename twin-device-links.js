@@ -174,7 +174,7 @@
   }
 
   const element=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text)n.textContent=text;return n;};
-  function mount(host,{onSelect,onDetail,onBack,onPreview,onView,onParts}={}){
+  function mount(host,{onSelect,onDetail,onBack,onPreview,onView,onParts,onCoolingTour}={}){
     const box=element('section','tdl-panel'),head=element('div','tdl-head'),left=element('div','tdl-heading');
     const category=element('span','tdl-category'),title=element('h3'),summary=element('p','tdl-summary');
     title.tabIndex=-1;left.append(category,title);head.append(left);
@@ -199,6 +199,8 @@
     const detailButton=action('部件剖解',()=>data&&onDetail?.(data.detailTarget,data));
     const partsHost=element('div');partsHost.id='tw-cooling-parts';partsHost.hidden=true;
     const partsButton=action('查看机组部件',()=>onParts?.());
+    const coolingTourButton=action('从本机开始冷却讲解',()=>data&&onCoolingTour?.(data.coolingUnit));
+    coolingTourButton.id='tw-device-cooling-tour';coolingTourButton.hidden=true;
     partsButton.hidden=true;partsButton.setAttribute('aria-controls',partsHost.id);
     function setPartsOpen(value){
       partsButton.setAttribute('aria-expanded',String(value));
@@ -208,6 +210,7 @@
     const viewButton=action('设备近景',()=>data&&onView?.(!closeView,data));
     function setCloseView(value){closeView=Boolean(value);viewButton.setAttribute('aria-pressed',String(closeView));viewButton.textContent=closeView?'查看联动':'设备近景';}
     setCloseView(false);if(onView)actions.append(viewButton);
+    if(onCoolingTour)actions.append(coolingTourButton);
     if(onParts)actions.append(partsButton);
     if(onDetail)actions.append(detailButton);
     const backButton=action('返回机房',()=>onBack?.());
@@ -222,6 +225,7 @@
       if(!next){clear();return null;}
       const changed=next.key!==data?.key;data=next;
       partsButton.hidden=!coolingNumber(data.key);
+      coolingTourButton.hidden=partsButton.hidden;
       detailButton.textContent=data.detailLabel;
       backButton.textContent=data.key.startsWith('sub-')||coolingNumber(data.key)?'返回园区':'返回机房';
       const physical=data.links.filter(l=>l.kind!=='reference');

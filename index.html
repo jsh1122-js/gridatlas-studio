@@ -18,7 +18,7 @@
   <link rel="stylesheet" href="design.css">
   <link rel="stylesheet" href="twin.css?v=bea8b45280">
   <link rel="stylesheet" href="twin-plan.css"><link rel="stylesheet" href="twin-rack-guide.css"><link rel="stylesheet" href="twin-device-links.css?v=ce4eb35622"><link rel="stylesheet" href="twin-observe.css?v=7d526b4385">
-  <link rel="stylesheet" href="twin-power-tour.css?v=be76296ee2"><link rel="stylesheet" href="twin-power-camera.css?v=230f7c6de3">
+  <link rel="stylesheet" href="twin-power-tour.css?v=40263e0f1f"><link rel="stylesheet" href="twin-power-camera.css?v=1b3db188c4">
   <link rel="stylesheet" href="twin-cooling-detail.css?v=94766f2be6">
   <link rel="stylesheet" href="studio.css"><link rel="stylesheet" href="equipment/equipment.css"><link rel="stylesheet" href="equipment/fabric.css"><link rel="stylesheet" href="equipment/relations.css"><link rel="stylesheet" href="equipment/inspection.css">
   <script defer src="map-data.js"></script>
@@ -34,18 +34,19 @@
   <script defer src="nearby-data.js"></script>
   <script defer src="nearby-ui.js"></script>
   <script defer src="twin-rack-circuit.js?v=a5e8624375"></script>
+  <script defer src="twin-cooling-route.js?v=036bbc9571"></script>
   <script defer src="twin-rack-guide.js?v=2ce50e668e"></script>
-  <script defer src="twin-rack-view.js?v=0282ae090b"></script>
+  <script defer src="twin-rack-view.js?v=411d8afcc3"></script>
   <script defer src="twin-yard.js?v=a443405911"></script>
-  <script defer src="twin-device-links.js?v=17c7212574"></script>
+  <script defer src="twin-device-links.js?v=a5c55a1aab"></script>
   <script defer src="twin-device-overlay.js?v=bd61c124d2"></script>
-  <script defer src="twin-power-camera.js?v=cd2cd0dbee"></script>
-  <script defer src="twin-power-tour.js?v=60025f3ec4"></script>
-  <script defer src="twin-campus.js?v=41c09ae635"></script>
+  <script defer src="twin-power-camera.js?v=3e12b3f229"></script>
+  <script defer src="twin-power-tour.js?v=91e99f1056"></script>
+  <script defer src="twin-campus.js?v=73214844b5"></script>
   <script defer src="twin-territory.js"></script>
   <script defer src="twin-cooling-detail.js?v=fa6f32d714"></script>
-  <script defer src="twin.js?v=596e6c01aa"></script>
-  <script defer src="app.js?v=307114548c"></script>
+  <script defer src="twin.js?v=ad1e6a6c66"></script>
+  <script defer src="app.js?v=adb4efd0fd"></script>
 </head>
 <body>
   <a href="#main" class="skip">跳到主要内容</a>
@@ -75,6 +76,7 @@
             </div>
             <button type="button" id="tw-yard-open" class="tw-yard-entry">变电站</button>
             <button type="button" id="tw-tour-open" aria-controls="tw-power-tour">供电自动讲解</button>
+            <button type="button" id="tw-cooling-tour-open" aria-controls="tw-cooling-picker tw-power-tour">冷却自动讲解</button>
             <button id="tw-expand" type="button" aria-label="全屏查看场景" title="全屏查看场景" aria-pressed="false"><i data-i="expand"></i></button></div>
           </div>
           <div class="tw-stage">
@@ -88,7 +90,15 @@
               <button type="button" data-camera="home" aria-label="复位场景视角" title="复位视角"><i data-i="focus"></i></button>
             </div>
           </div>
+          <div id="tw-cooling-picker" hidden>
+            <label for="tw-cooling-start-unit">点一台室外机组开始讲解，也可按编号选择</label>
+            <select id="tw-cooling-start-unit" aria-label="按编号选择讲解起点"></select>
+            <button type="button" id="tw-cooling-pick-cancel">取消</button>
+          </div>
           <section id="tw-power-tour" hidden aria-label="供电自动讲解"></section>
+          <section id="tw-cooling-inspect" hidden aria-label="冷却设备细看">
+            <h3></h3><code></code><p></p>
+          </section>
           <section id="tw-rack-guide" hidden aria-label="机柜供电讲解"></section>
           <section id="tw-device-panel" hidden aria-label="设备联动"></section>
           <div class="tp-routes" id="tp-routes" hidden><div class="tp-trace-head"><span>追踪回路</span><div class="tp-switches" aria-label="选择回路"></div></div><div id="tp-chain" aria-label="沿回路查看设备"></div></div>
