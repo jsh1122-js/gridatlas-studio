@@ -378,9 +378,9 @@
   }
   function showLayout() {
     tab = "topologies";
-    GridAidcTopology.resetView($("#body"));
+    GridAidcTopology.showCabinets($("#body"));
     render();
-    requestAnimationFrame(() => document.querySelector(".alr-review")?.scrollIntoView({block:"nearest"}));
+    requestAnimationFrame(() => document.querySelector(".cr-room")?.scrollIntoView({block:"start"}));
   }
   function render() {
     error("");
@@ -1021,6 +1021,7 @@
       document.querySelector('[data-subtotal="' + index + '"]').textContent =
         fmt(n * d.price_wan);
       renderSceneTotals();
+      changed();
     } else if (input.dataset.assume) {
       if (
         input.value !== "" &&
@@ -1060,8 +1061,7 @@
       el.value = scenarioAssumptions[el.dataset.assume];
       renderSceneTotals();
     }
-    if (el.dataset.fin || el.dataset.assume || el.dataset.row !== undefined)
-      changed();
+    if (el.dataset.fin || el.dataset.assume) changed();
     if (
       e.target.dataset.row !== undefined &&
       (e.target.value === "" || !e.target.validity.valid)
@@ -1102,7 +1102,10 @@
       if (tabs[api.get("tab")]) tab = api.get("tab");
       if (api.get("view") === "layout") showLayout();
       else render();
-      window.GridAidcProject = Object.freeze({ getSnapshot, restore, showLayout });
+      window.GridAidcProject = Object.freeze({ getSnapshot, restore, showLayout, showEquipmentList(id){
+        if(id&&id!==sceneId&&data.scenes.some(s=>s.id===id)){selectScene(id);changed();}
+        tab="scenes";render();
+      } });
       if (parent !== window)
         parent.postMessage({ type: "gridatlas-aidc-ready" }, location.origin);
     })

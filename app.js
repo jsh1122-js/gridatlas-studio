@@ -239,7 +239,8 @@
     const allowed=['twin','equipment','overview','world','design','aidc','industry','energy','library'];
     const hash=location.hash.slice(1);
     const direct=/^equipment\/([a-z0-9:-]+(?:\/[a-zA-Z0-9_-]+)?)$/.exec(hash);
-    const intoAidcLayout=hash==='aidc/layout';
+    const intoAidcLayout=hash==='aidc/layout',intoAidcList=/^aidc\/scene(?:\/([a-z0-9-]+))?$/.exec(hash);
+    const intoCabinets=/^twin\/cabinets(?:\/([a-z0-9-]+))?$/.exec(hash);
     const intoGrid=hash==='twin/grid';
     const intoRack=hash==='twin/rack';
     const intoTour=hash==='twin/tour';
@@ -247,7 +248,7 @@
     const intoGpu=/^twin\/gpu-trace(?:\/(H\d+-R\d+-[ST]\d+-G\d+))?(?:\?([^#]*))?$/.exec(hash);
     const intoLayout=hash==='twin/layout';
     const intoDevice=/^twin\/device\/([a-z0-9-]+)$/.exec(hash);
-    let id=intoAidcLayout?'aidc':direct?'equipment':intoRack||intoGrid||intoTour||intoCooling||intoGpu||intoLayout||intoDevice?'twin':hash;if(!allowed.includes(id))id='twin';
+    let id=intoAidcLayout||intoAidcList?'aidc':direct?'equipment':intoRack||intoGrid||intoTour||intoCooling||intoGpu||intoLayout||intoCabinets||intoDevice?'twin':hash;if(!allowed.includes(id))id='twin';
     const wasInspecting=inspection.open, target=history.state?.gridatlasInspect;
     const fromRoom=id==='equipment' && typeof target==='string' && twin && (activeRoute==='twin'||wasInspecting);
     const sequence=++inspectSequence;
@@ -286,6 +287,8 @@
         twin.showGpu(target);
       }
       if(!wasInspecting&&intoLayout)twin.openLayout();
+      if(!wasInspecting&&intoCabinets)twin.openCabinets(intoCabinets[1]);
+      else if(!wasInspecting&&(!hash||hash==='twin'))twin.leaveCabinets();
       if(wasInspecting){
         twin.resumeFromInspection();
         if(entryFocus?.isConnected)entryFocus.focus({preventScroll:true});
@@ -307,12 +310,12 @@
     else if(id==='world')mountWorld();
     else if(id==='aidc' || id==='industry' || id==='energy') {
       const f=$('#'+id+'-frame');
-      if(!f.hasAttribute('src'))f.src=id+'/index.html'+(intoAidcLayout?'?view=layout':'');
-      else if(id==='aidc'){restoreAidcProject();if(intoAidcLayout)f.contentWindow.GridAidcProject?.showLayout();}
+      if(!f.hasAttribute('src'))f.src=id+'/index.html'+(intoAidcLayout?'?view=layout':intoAidcList?'?tab=scenes':'');
+      else if(id==='aidc'){restoreAidcProject();if(intoAidcLayout)f.contentWindow.GridAidcProject?.showLayout();else if(intoAidcList)f.contentWindow.GridAidcProject?.showEquipmentList(current().aidc?undefined:intoAidcList[1]);}
       else if(id==='energy')energyContext();
     }
     document.title=({twin:'算电数字孪生',equipment:'设备剖解',overview:'算电选址工作台',world:'全球基础设施地图',design:'方案设计',aidc:'AIDC 数据台',industry:'电力行业数据库',energy:'电价与政策资料',library:'方案库'})[id]+' · 算电图研';
-    if((intoGrid||intoRack||intoDevice||intoTour||intoCooling||intoGpu||intoLayout)&&!wasInspecting)requestAnimationFrame(()=>document.querySelector('.tw-visual').scrollIntoView({block:'start'}));
+    if((intoGrid||intoRack||intoDevice||intoTour||intoCooling||intoGpu||intoLayout||intoCabinets)&&!wasInspecting)requestAnimationFrame(()=>document.querySelector('.tw-visual').scrollIntoView({block:'start'}));
     else if(!fromRoom && !(wasInspecting && id==='twin'))scrollTo(0,0);
   }
   function goto(id) {if(location.hash==='#'+id)route();else location.hash=id;}
@@ -324,6 +327,8 @@
     if(event.source===$('#aidc-frame').contentWindow && event.data.type==='gridatlas-aidc-ready'){
       aidcProjectId=null;restoreAidcProject();
       if(location.hash==='#aidc/layout')$('#aidc-frame').contentWindow.GridAidcProject?.showLayout();
+      const listRoute=/^#aidc\/scene(?:\/([a-z0-9-]+))?$/.exec(location.hash);
+      if(listRoute)$('#aidc-frame').contentWindow.GridAidcProject?.showEquipmentList(current().aidc?undefined:listRoute[1]);
       return;
     }
     if(event.source===$('#aidc-frame').contentWindow && event.data.type==='gridatlas-aidc-state'){

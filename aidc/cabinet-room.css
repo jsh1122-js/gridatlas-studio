@@ -1,0 +1,24 @@
+.cr-room{background:#112332;color:#dfebf2;min-width:0;line-height:1.5;border:1px solid #34505e;border-radius:8px;overflow:hidden}
+.cr-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px;background:#142a38;color:#e6f2f5;position:static;border:0}
+.cr-head h3{font-size:1rem;margin:0;color:#eff9f7}.cr-head p{margin:2px 0 0;color:#a7c2cd;font-size:.84rem}
+.cr-head select{background:#0f2633;color:#e0f2ef;border:1px solid #4a6675;border-radius:5px;padding:5px 8px;font:inherit;max-width:100%}
+.cr-stats{margin:0;padding:9px 16px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;border-block:1px solid #34505e;font-variant-numeric:tabular-nums}
+.cr-stats div{min-width:0;border-left:2px solid #3f847f;padding-left:9px}
+.cr-stats dt{color:#adc6d0;font-size:.78rem}.cr-stats dd{margin:1px 0;color:#e7f4f7;font-size:1rem;font-weight:650}
+.cr-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:9px 14px}
+.cr-tools button,.cr-retry{font:inherit;font-size:.85rem;padding:6px 10px;border:1px solid #486875;border-radius:5px;background:#1a3544;color:#e3f3f3;cursor:pointer}
+.cr-tools button:hover,.cr-tools button:focus-visible{border-color:#89c9c0}
+.cr-check{margin:0;padding:8px 16px;border-top:1px solid #2d4758;font-size:.87rem}
+.cr-check summary{cursor:pointer;color:#bedadf}.cr-check p,.cr-check li{margin:.4em 0}.cr-check ul{padding-left:1.4rem}
+.cr-notice{padding:16px;color:#c9dde4}
+.tw-cabinets #tw-stage-container,.tw-cabinets .tw-drag-hint{display:none}
+#tw-cabinet-room[hidden]{display:none}
+.tw-cabinets .tw-stage-foot{display:none}
+.tw-cabinets:fullscreen,.tw-cabinets.tw-expanded{overflow:auto}
+@media(max-width:550px){.cr-head,.cr-stats{padding:8px 10px}.cr-head{align-items:flex-start}.cr-stats{gap:5px}.cr-stats div{padding-left:5px}.cr-stats dd{font-size:.85rem}.cr-stats dt{font-size:.73rem}.cr-check{padding:7px 10px}}
+
+.cr-origin{margin:0;padding:6px 16px;background:#142a38;color:#b5cbd4;font-size:.82rem}
+
+.cr-halls{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:8px 14px;font-size:.86rem;background:#1a3341}
+.cr-halls input{width:6em;color:inherit;background:#112332;font:inherit;border:1px solid #527583;border-radius:4px;padding:4px 7px}
+.cr-halls button{font:inherit;color:#aee5db;background:#193c43;border:1px solid #527583;border-radius:4px;padding:5px 8px}

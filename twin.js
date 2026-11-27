@@ -371,12 +371,13 @@
         cooling: [config.cooling, '方案采用' + config.cooling + '。当前工况下，制冷和其他辅助设施合计 ' + number(metrics.average - config.it * config.load / 100) + ' MW。'],
         power: [config.architecture + ' 供配电', '设施设计峰值为 ' + number(metrics.facility) + ' MW，当前工况年均负荷为 ' + number(metrics.average) + ' MW。'],
         campus: ['园区总体方案', number(config.it) + ' MW 设计 IT 功率，采用' + config.architecture + '和' + config.cooling + '。点选模型中的建筑或设备可查看参数。'],
+        cabinets: ['清单机房','机柜、U 位和端口根据所选 AIDC 清单分配。可按柜号查看，也可直接选择一台交换机或存储设备。'],
         territory: [project.location.label, '点选区域图中的变电站可查看电压、距场址的直线距离和地图原始记录。']
       };
       const detail = showingStation
         ? [station.name || '未标注站名的变电站', (station.voltage || '电压未标注') + ' · 距场址 ' + distance(station.distanceKm) + (station.source==='manual'?' · 手动录入':' · OSM '+station.id) + (station.lifecycle ? ' · ' + station.lifecycle : '')]
-        : descriptions[mode === 'territory' ? mode : selected || 'campus'];
-      const campusFocus = Boolean(selected && mode !== 'territory');
+        : descriptions[mode === 'territory' || mode==='cabinets' ? mode : selected || 'campus'];
+      const campusFocus = Boolean(selected && mode !== 'territory' && mode !== 'cabinets');
       $('scene-detail').hidden = !campusFocus;
       if (campusFocus) {
         $('focus-name').textContent = detail[0];
@@ -394,7 +395,7 @@
       const link = $('object-link');
       link.hidden = !(showingStation && /^https:\/\/(?:www\.)?openstreetmap\.org\//.test(station.url));
       if (link.hidden) link.removeAttribute('href'); else link.href = station.url;
-      objectButtons.forEach(button => button.setAttribute('aria-pressed', String(mode !== 'territory' && selected === button.dataset.object)));
+      objectButtons.forEach(button => button.setAttribute('aria-pressed', String(mode !== 'territory' && mode !== 'cabinets' && selected === button.dataset.object)));
     };
     function selectCampus(key) {
       if (key && !['it','cooling','power'].includes(key)) return;
@@ -417,15 +418,60 @@
       territory.update({project,metrics,stations:nearData,gridPlan});
       gridEditor.update({project,metrics,stations:nearData});
     }
+    let cabinetTarget=null,cabinetKey='',cabinetView=null,cabinetRevision=0;
+    function closeCabinetRoom(){
+      cabinetRevision++;cabinetKey='';cabinetView?.dispose();cabinetView=null;
+      $('cabinet-room').replaceChildren();
+    }
+    async function renderCabinetRoom(){
+      const snapshot=project.aidc,target=cabinetTarget,host=$('cabinet-room');
+      const key=JSON.stringify([project.id,target,snapshot?.sceneId,snapshot?.items]);
+      if(key===cabinetKey)return;
+      closeCabinetRoom();cabinetKey=key;
+      const revision=cabinetRevision;
+      host.append(element('p','正在读取设备清单…','cr-notice'));
+      try{
+        const {data,byId}=await GridCabinetRoom.catalog();
+        if(revision!==cabinetRevision||!active||mode!=='cabinets')return;
+        const currentId=snapshot?.sceneId||data.scenes[0].id;
+        const scene=data.scenes.find(s=>s.id===(target||currentId));
+        if(!scene)throw new Error('未找到这个场景。');
+        const saved=scene.id===snapshot?.sceneId;
+        const rows=GridCabinetRoom.records(saved?snapshot.items:scene.items,byId,data.layout);
+        const picker=element('select','');picker.setAttribute('aria-label','查看机房场景');
+        picker.add(new Option('当前项目机房',''));
+        for(const other of data.scenes)picker.add(new Option(GridCabinetRoom.title(other),other.id));
+        picker.value=target||'';
+        picker.onchange=()=>{location.hash='twin/cabinets'+(picker.value?'/'+picker.value:'');};
+        cabinetView=GridCabinetRoom.mount(host,scene,rows,data.layout,{
+          source:saved?'项目已保存清单':'场景原始清单',actions:picker,
+          edit:!snapshot||scene.id===currentId?()=>{location.hash='aidc/scene/'+scene.id;}:undefined
+        });
+      }catch(error){
+        if(revision!==cabinetRevision)return;
+        host.replaceChildren(element('p',error.message||'设备清单加载失败。','cr-notice'));
+        const retry=element('button',target?'打开当前项目机房':'重新加载','cr-retry');retry.type='button';
+        retry.onclick=()=>{cabinetKey='';if(target)location.hash='twin/cabinets';else renderCabinetRoom();};host.append(retry);
+      }
+    }
+    function openCabinets(target){
+      cabinetTarget=target||null;
+      if(mode!=='cabinets')changeMode('cabinets');else renderCabinetRoom();
+    }
     function renderScene() {
-      const regional = mode === 'territory';
+      const regional = mode === 'territory', cabinets=mode==='cabinets';
+      $('cabinet-room').hidden=!cabinets;visual.classList.toggle('tw-cabinets',cabinets);
+      if(!cabinets&&cabinetKey)closeCabinetRoom();
       $('territory').hidden = !regional;
       $('grid-connection').hidden=!regional;
       visual.classList.toggle('tw-regional',regional);
       visual.querySelector('.tw-drag-hint').lastChild.textContent=regional?'拖动平移 · 滚轮缩放':'拖动旋转 · 滚轮缩放';
-      $('campus').hidden = regional;
+      $('campus').hidden = regional||cabinets;
       modeButtons.forEach(btn => btn.setAttribute('aria-pressed', String(mode === btn.dataset.twinMode)));
-      if (regional) {
+      if (cabinets) {
+        campus?.destroy();campus=null;territory?.destroy();territory=null;
+        renderCabinetRoom();
+      } else if (regional) {
         campus?.destroy();
         campus = null;
         const entering = !territory;
@@ -446,7 +492,7 @@
         campus.setCircuit?.(planner.getCircuit());
         campus.setSelected(selected);
       }
-      if(!observing)$('scene-source').textContent = {campus:campusNote, cutaway:'机柜为代表性示意，规划数量按方案折算', territory:'规划距离按场址与站点代表坐标计算，实际线路长度以勘测为准'}[mode];
+      if(!observing)$('scene-source').textContent = {campus:campusNote, cutaway:'机柜为代表性示意，规划数量按方案折算',cabinets:'机柜排布按 AIDC 清单生成', territory:'规划距离按场址与站点代表坐标计算，实际线路长度以勘测为准'}[mode];
       planner.renderRoutes(mode);
       if(layoutActive)showLayout(true);
       renderDetails();
@@ -455,11 +501,15 @@
       if (mode !== nextMode) {
         if(nextMode!=='campus')endChoosing();
         if(layoutActive)campus?.setLayoutView(false);
-        if(nextMode==='territory'){
+        if(nextMode==='territory'||nextMode==='cabinets'){
           if(tour.getState().active)tour.close();
           if(!gpuPanel.hidden)forgetGpu();
         }
         if(observing&&!keepObservation)clearObservation();
+        if(mode==='cabinets'&&location.hash.startsWith('#twin/cabinets')){
+          const hash=nextMode==='territory'?'#twin/grid':'#twin';
+          history.replaceState(history.state,'',hash);
+        }
         mode = nextMode;
         if(mode==='cutaway')onPreload?.();
         if (mode !== 'territory') selectStation(null);
@@ -547,9 +597,9 @@
     }
     $('motion').onclick=()=>{playing=!playing;campus?.setPlaying?.(playing);territory?.setPlaying?.(playing);showMotion();};
     showMotion();
-    modeButtons.forEach(btn => btn.onclick = () => {if(layoutActive)campus?.setLayoutView(false);if(observing)clearObservation();changeMode(btn.dataset.twinMode);});
+    modeButtons.forEach(btn => btn.onclick = () => {if(btn.dataset.twinMode==='cabinets'){if(!location.hash.startsWith('#twin/cabinets'))location.hash='twin/cabinets';else openCabinets(cabinetTarget);return;}if(layoutActive)campus?.setLayoutView(false);if(observing)clearObservation();changeMode(btn.dataset.twinMode);});
     objectButtons.forEach(btn => btn.onclick = () => {
-      if (mode === 'territory') changeMode('campus');
+      if (mode === 'territory'||mode==='cabinets') changeMode('campus');
       if(observing)clearObservation();
       selectCampus(btn.dataset.object);
       if(btn.dataset.object==='power')observe('sub-transformer');
@@ -569,9 +619,10 @@
     });
     let beforeInspection;
     return {
-      observe,openLayout,showGpu,openGrid:()=>changeMode('territory'),startPowerTour:()=>startTour('power',null,false),
+      observe,openLayout,openCabinets,leaveCabinets(){if(mode==='cabinets')changeMode('campus');},showGpu,openGrid:()=>changeMode('territory'),startPowerTour:()=>startTour('power',null,false),
       startCoolingTour:unit=>unit===null?chooseCoolingOrigin():startTour('cooling',unit,false),
       getShareHash(){
+        if(mode==='cabinets')return '#twin/cabinets'+(cabinetTarget?'/'+cabinetTarget:'');
         if(mode==='territory')return '#twin/grid';
         if(gpuTarget){
           const params=new URLSearchParams();
@@ -629,6 +680,7 @@
       },
       pause() {
         endChoosing();
+        if(cabinetKey)closeCabinetRoom();
         tour.close();if(!gpuPanel.hidden)forgetGpu();
         if(layoutActive)campus?.setLayoutView(false);
         clearObservation(false);guide.pause?.();active = false; beforeInspection=null;

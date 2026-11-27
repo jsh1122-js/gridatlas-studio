@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const views = {facility:'园区分区',power:'供配电',cooling:'制冷循环',rack:'机柜与网络',super:'超节点'};
+  const views = {facility:'园区分区',cabinets:'三维机房',power:'供配电',cooling:'制冷循环',rack:'机柜与网络',super:'超节点'};
   const archNames={ac_ups:'交流 UPS',hvdc:'高压直流',sst:'固态变压器'};
   const coolingNames={air_chiller:'冷冻水风冷',air_ahu:'空气处理机组',air_crah:'机房空气处理',liquid_cdu_dry:'冷板液冷与干冷器',liquid_cdu_tower:'冷板液冷与冷却塔',immersion:'浸没冷却'};
   const zoneNames={grid:'市电接入',powerpod:'电力模块',ess:'备电与储能',datahall:'IT 机房',supernode:'超节点大厅',thermal_in:'室内热管理',thermal_out:'室外冷源',mech:'水泵与机房',roof:'屋面排热'};
@@ -87,6 +87,15 @@
       for(const [key,label] of Object.entries(views)){
         const b=el('button',label);b.type='button';b.setAttribute('aria-pressed',String(key===state.view));b.onclick=()=>{state.view=key;state.node=null;redraw();};tabs.append(b);
       }
+      if(state.view==='cabinets'){
+        const host=el('div');panel.append(host);
+        GridCabinetRoom.mount(host,scene,rows,data.layout,{source:'当前设备清单',edit:()=>document.querySelector('[data-tab="scenes"]').click()});
+        const baseline=el('details','','cr-check');baseline.append(el('summary','对照原始柜阵与分区清单'));panel.append(baseline);
+        baseline.addEventListener('toggle',()=>{
+          if(baseline.open&&!baseline.querySelector('.alr-review'))GridAidcLayoutReview.render(baseline,scene,rows,data.layout);
+        });
+        return;
+      }
       const superRows=rows.filter(r=>superKind(r.device)),models=merge(superRows);
       if(!models.some(r=>r.device.id===state.model))state.model=models[0]?.device.id;
       const v=layout(state.view,scene,rows,state.model),canvas=el('div','','gt-canvas');panel.append(canvas);
@@ -130,5 +139,5 @@
     };
     redraw();
   }
-  window.GridAidcTopology={render,resetView:root=>prefs.delete(root)};
+  window.GridAidcTopology={render,showCabinets:root=>prefs.set(root,{view:'cabinets',node:null,model:null})};
 })();

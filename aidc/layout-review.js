@@ -71,7 +71,7 @@
     const a=review(scene,records,layout),box=el('section','','alr-review');
     box.dataset.layoutReview=scene.id;box.dataset.placed=String(a.footprints.length);box.dataset.demand=String(a.demand);
     const unplaced=a.groups.filter(g=>g.count>g.placed);
-    box.append(el('h3','IT 机房柜位核对'));
+    box.append(el('h3','原始柜阵 · 逐台占地对照'));
     if(a.cells!==undefined){
       const fmt=n=>Number(n.toFixed(2)).toLocaleString('zh-CN');
       box.append(el('p',a.nrows+' 行 × '+a.ncols+' 位。列距 '+fmt(a.pitch)+' m，冷通道 '+fmt(a.cold)+' m，热通道 '+fmt(a.hot)+' m。按清单顺序试排，每台设备根据外形宽度向上占用整柜位，较宽的整套设备连续跨位。'));
@@ -83,7 +83,7 @@
       box.append(legend,el('p','已排 '+a.footprints.length+' / '+a.demand+' 台或套，占用 '+a.used+' / '+a.cells+' 个可排柜位。柜区包络 '+fmt(a.arrayWidth)+' × '+fmt(a.arrayDepth)+' m，场景建筑外廓 '+fmt(a.w)+' × '+fmt(a.d)+' m。'));
     }else box.append(el('p',a.demand?'机柜外形或行列尺寸资料不足，当前清单无法完成几何排布。':'当前 IT 分区清单没有可落位的计算、网络或存储柜。'));
     if(unplaced.length){
-      const detail=el('details');detail.open=true;detail.append(el('summary','未排设备 '+(a.demand-a.footprints.length)+' 台或套'));
+      const detail=el('details');detail.open=true;detail.append(el('summary','原柜阵未独立落位 '+(a.demand-a.footprints.length)+' 台或套'));
       const list=el('ul');for(const g of unplaced)list.append(el('li',(g.device.model||g.device.name)+' × '+(g.count-g.placed)+(positive(g.device.w)&&positive(g.device.d)?'，当前行列或建筑边界容纳不下':'，缺外形尺寸')));
       detail.append(list);box.append(detail);
     }

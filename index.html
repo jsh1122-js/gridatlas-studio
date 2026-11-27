@@ -27,6 +27,13 @@
   <script defer src="map.js"></script>
   <script defer src="design.js"></script>
   <script defer src="space-plan.js"></script>
+  <link rel="stylesheet" href="aidc/cabinet-room.css?v=f660415fa0">
+  <link rel="stylesheet" href="aidc/cabinet-scene.css?v=52a38a8b93">
+  <script defer src="aidc/layout-review.js?v=ca803229c2"></script>
+  <script defer src="aidc/cabinet-plan.js?v=9db81ec85d"></script>
+  <script defer src="aidc/cabinet-wiring.js?v=45fed0b4e7"></script>
+  <script defer src="aidc/cabinet-scene.js?v=9c0ce92920"></script>
+  <script defer src="aidc/cabinet-room.js?v=30534bcc75"></script>
   <script defer src="rack-mix.js"></script>
   <script defer src="twin-plan.js"></script>
   <script defer src="aidc/finance.js"></script>
@@ -50,8 +57,8 @@
   <script defer src="territory-geo.js?v=ecf642fcf0"></script>
   <script defer src="twin-territory.js?v=110e2760d9"></script>
   <script defer src="twin-cooling-detail.js?v=fa6f32d714"></script>
-  <script defer src="twin.js?v=e224bcf539"></script>
-  <script defer src="app.js?v=a93dd33a26"></script>
+  <script defer src="twin.js?v=581c2f061e"></script>
+  <script defer src="app.js?v=994f789988"></script>
 </head>
 <body>
   <a href="#main" class="skip">跳到主要内容</a>
@@ -77,6 +84,7 @@
               <button type="button" data-twin-mode="campus" aria-pressed="true">园区总览</button>
               <button type="button" id="tw-layout" aria-pressed="false">总平面</button>
               <button type="button" data-twin-mode="cutaway" aria-pressed="false">机房剖视</button>
+              <button type="button" data-twin-mode="cabinets" aria-pressed="false">清单机房</button>
               <button type="button" data-twin-mode="territory" aria-pressed="false">区域电网</button>
             </div>
             <button type="button" id="tw-yard-open" class="tw-yard-entry">变电站</button>
@@ -85,7 +93,8 @@
             <button type="button" id="tw-gpu-open" aria-controls="tw-gpu-trace">GPU 溯源</button>
             <button id="tw-expand" type="button" aria-label="全屏查看场景" title="全屏查看场景" aria-pressed="false"><i data-i="expand"></i></button></div>
           </div>
-          <div class="tw-stage">
+          <section id="tw-cabinet-room" aria-label="清单机房三维视图" hidden></section>
+          <div class="tw-stage" id="tw-stage-container">
             <div id="tw-campus" class="tw-viewport"></div><div id="tw-territory" class="tw-viewport" hidden></div>
             <div id="tw-device-ink" hidden></div>
             <div id="tw-scene-detail" class="tw-scene-detail" hidden><strong id="tw-focus-name"></strong><span id="tw-focus-value"></span><button id="tw-drill" type="button" hidden>进入机房剖视 ›</button></div>
@@ -107,7 +116,7 @@
             <div><dt>机电分区</dt><dd data-layout-systems></dd></div>
             <div><dt>备用供电</dt><dd data-layout-emergency></dd></div>
             <div><dt>深化设计待核</dt><dd>消防分区与疏散、设备运输和检修净距、油料保障、双路通信及监控点位需结合项目图纸核定。</dd></div></dl>
-            <div class="tw-review-links"><button type="button" id="tw-layout-emergency">查看备用供电区</button><a href="#aidc/layout">按设备清单核查机柜排布</a></div>
+            <div class="tw-review-links"><button type="button" id="tw-layout-emergency">查看备用供电区</button><a href="#twin/cabinets">打开清单机房与柜内接线</a><a href="#aidc/layout">按设备清单核查机柜排布</a></div>
           </details>
           <section id="tw-grid-connection" aria-label="公共电网接入方案" hidden></section>
           <section id="tw-gpu-trace" aria-label="GPU 供电与散热" hidden>
