@@ -85,6 +85,7 @@
       config,
       ...(rackMix.length ? {rackMix} : {}),
       ...(raw.spacePlan == null ? {} : {spacePlan:window.GridSpacePlan.clean(raw.spacePlan)}),
+      ...(raw.gridConnection == null ? {} : {gridConnection:window.GridConnection.clean(raw.gridConnection)}),
       ...(raw.rackStudy == null ? {} : {rackStudy:window.GridRackStudy.clean(raw.rackStudy)}),
       ...(raw.aidc == null ? {} : {aidc:cleanAidc(raw.aidc)}),
       updatedAt: updatedAt.toISOString()
@@ -158,6 +159,13 @@
       ['综合到户电价', `${number(c.tariff, 4)} 元/kWh`, '绿电目标占比', `${number(c.green, 3)}%`],
       ['供电架构', c.architecture, '制冷方式', c.cooling]
     ];
+    if(data.gridConnection){
+      const plan=window.GridConnection.describe(data),s=plan.station;
+      parameters.push(['自建变电站',number(s.highKV)+' / '+number(s.lowKV)+' kV','主变配置',s.units+' × '+number(s.unitMVA)+' MVA']);
+      for(const row of plan.links){
+        parameters.push(['拟接入上级站',row.name||row.id,'拟接入回数 / 直线距离',row.circuits+' 回 / '+number(row.distanceKm)+' km']);
+      }
+    }
     try {
       const layout=window.GridSpacePlan.calculate(c,data.rackStudy,data.spacePlan);
       parameters.push(['机房配置',number(layout.halls,0)+' 间','机房净面积合计',number(layout.whiteSpaceM2,1)+' m²'],

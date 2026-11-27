@@ -21,11 +21,12 @@
     const halls=model.plan.dims,units=Object.keys(model.coolingBounds).length;
     if(!halls.length||!units)return null;
     let index=Number.isInteger(hallIndex)&&halls[hallIndex]?hallIndex:0;
-    if(!halls[index].coolingPaths){
+    if(options.rackIndex==null&&!halls[index].coolingPaths){
       const other=halls.findIndex(hall=>hall.coolingPaths);
       if(other>=0)index=other;
     }
-    const hall=halls[index],paths=hall.coolingPaths,liquid=Boolean(paths);
+    const hall=halls[index],paths=options.rackIndex==null?hall.coolingPaths:hall.coolingByRack?.[options.rackIndex],liquid=Boolean(paths);
+    if(options.rackIndex!=null&&!paths)return null;
     const unit=Math.max(1,Math.min(units,Math.trunc(Number(options.coolingUnit))||1));
     const plantKey='cooling-unit-'+unit,plant=String(unit).padStart(2,'0')+' 号冷却机组';
     const columns=units/2,row=Math.floor((unit-1)/columns),column=(unit-1)%columns;

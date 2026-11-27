@@ -3,8 +3,8 @@
   'use strict';
   function build(m,anchors,units,halls=3){
     const yard={incoming:[],transformers:[],feeders:[],footprints:[]};
-    const count=Math.max(2,Math.min(4,units)),outgoing=Math.max(1,Math.min(4,halls));
-    const pitch=20.9/count,bays=count+outgoing;
+    const count=Math.max(1,Math.min(4,units)),outgoing=Math.max(1,Math.min(4,halls));
+    const pitch=20.9/Math.max(2,count),bays=count+outgoing;
     const bayY=index=>10.98+index*9/(bays-1);
     const {box,beam,cylinder,rect}=m;
     const steel='#96aab0',edge='#d2dada',dark='#465c69',concrete='#aab6b6',enamel='#4f717c',ceramic='#abc4c2',copper='#bb946a';

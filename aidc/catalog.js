@@ -376,6 +376,12 @@
       )
       .join("");
   }
+  function showLayout() {
+    tab = "topologies";
+    GridAidcTopology.resetView($("#body"));
+    render();
+    requestAnimationFrame(() => document.querySelector(".alr-review")?.scrollIntoView({block:"nearest"}));
+  }
   function render() {
     error("");
     nav();
@@ -627,7 +633,7 @@
       slots.push({
         dev,
         count,
-        zone: data.layout.role_zone[byId.get(dev).role] || "",
+        zone: GridAidcLayoutReview.defaultZone(byId.get(dev), data.layout),
       });
       error("");
       renderBOM();
@@ -1094,8 +1100,9 @@
       selectScene(api.get("scene"));
       if (api.get("scene")) tab = "scenes";
       if (tabs[api.get("tab")]) tab = api.get("tab");
-      render();
-      window.GridAidcProject = Object.freeze({ getSnapshot, restore });
+      if (api.get("view") === "layout") showLayout();
+      else render();
+      window.GridAidcProject = Object.freeze({ getSnapshot, restore, showLayout });
       if (parent !== window)
         parent.postMessage({ type: "gridatlas-aidc-ready" }, location.origin);
     })

@@ -1,0 +1,25 @@
+.gc-panel{--gc-rule:#355064;--gc-muted:#a9bfcc;color:#e7f3f4;background:#112333;border:1px solid var(--gc-rule);border-radius:12px;padding:1rem;min-width:0}
+.gc-panel h2,.gc-panel h3,.gc-panel h4{color:#e9f5f5;margin:0;line-height:1.4}
+.gc-panel h2{font-size:1.08rem}.gc-panel h3{font-size:1rem}.gc-panel h4{font-size:.94rem;overflow-wrap:anywhere}
+.gc-panel header p,.gc-panel section>p,.gc-panel article>p{margin:.3rem 0 .7rem;color:var(--gc-muted);font-size:.875rem;line-height:1.55}
+.gc-panel>section{border-top:1px solid var(--gc-rule);margin-top:.85rem;padding-top:.85rem}
+.gc-panel .gc-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:end;gap:.65rem .8rem;margin:.6rem 0}
+.gc-panel label{display:grid;min-width:0;gap:.25rem;font-size:.875rem;color:#c7dade}
+.gc-panel .gc-wide,.gc-panel .gc-link-actions{grid-column:1/-1}
+.gc-panel input,.gc-panel select,.gc-panel button{box-sizing:border-box;max-width:100%;font:inherit;font-size:.875rem;border-radius:5px;color:#ebf5f7;background:#132a3a;border:1px solid #4a6577}
+.gc-panel input,.gc-panel select{width:100%;min-width:0;padding:.4rem .45rem;min-height:2.3rem}
+.gc-panel button{cursor:pointer;padding:.43rem .6rem;line-height:1.4;min-height:2.3rem;justify-self:start}
+.gc-panel button[type=submit]{background:#204344;border-color:#448279;color:#c4f7e5}
+.gc-panel button:disabled,.gc-panel select:disabled{opacity:.5;cursor:default}
+.gc-panel :is(input,select,button,summary):focus-visible{outline:2px solid #87dfc9;outline-offset:2px}
+.gc-panel details{border-top:1px solid #2e4554;margin-top:.7rem;padding-top:.55rem}
+.gc-panel summary{font-size:.9rem;color:#9edacf;cursor:pointer}
+.gc-panel [data-gc-links] article{border-left:3px solid #67b5a3;border-radius:5px;background:#1a3040;margin-top:.8rem;padding:.65rem .75rem}
+.gc-panel .gc-link-actions{display:flex;flex-wrap:wrap;gap:.45rem}
+.gc-panel [data-gc-status]{color:#ace5d2;font-size:.88rem;margin:.5rem 0 0}
+.gc-panel [data-gc-status]:empty{display:none}
+.gc-panel .gc-note{font-size:.81rem;margin:.85rem 0 0;line-height:1.6}
+@media(max-width:520px){.gc-panel{padding:.8rem}.gc-panel button,.gc-panel select,.gc-panel input{min-height:2.6rem}.gc-panel .gc-fields{column-gap:.6rem}}
+.gc-panel article a{color:#9ddfd4;text-underline-offset:.15em}
+.gc-panel .gc-voltage{margin:0;color:#abbfc8;font-size:.81rem;line-height:1.5}
+.gc-panel .gc-voltage[data-gc-voltage=unlisted]{color:#f4c695}

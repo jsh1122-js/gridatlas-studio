@@ -189,7 +189,7 @@
     let captionsOnly=false;
     const mediumNames={supply:'供水',return:'回水',exchange:'换热'};
     function setNarrative(kind='power',origin=''){
-      const title=kind==='cooling'?'冷却巡视':'供电巡视';
+      const title={cooling:'冷却巡视',power:'供电巡视','gpu-power':'供电溯源','gpu-cooling':'回液追踪'}[kind]||'供电巡视';
       host.dataset.kind=kind;heading.textContent=origin?title+' · '+origin:title;
       host.setAttribute('aria-label',title);progress.setAttribute('aria-label',title+'总进度');
     }

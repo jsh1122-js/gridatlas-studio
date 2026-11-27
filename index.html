@@ -17,8 +17,10 @@
   <link rel="stylesheet" href="station-view.css">
   <link rel="stylesheet" href="design.css">
   <link rel="stylesheet" href="twin.css?v=bea8b45280">
-  <link rel="stylesheet" href="twin-plan.css"><link rel="stylesheet" href="twin-rack-guide.css"><link rel="stylesheet" href="twin-device-links.css?v=ce4eb35622"><link rel="stylesheet" href="twin-observe.css?v=7d526b4385">
-  <link rel="stylesheet" href="twin-power-tour.css?v=40263e0f1f"><link rel="stylesheet" href="twin-power-camera.css?v=1b3db188c4">
+  <link rel="stylesheet" href="twin-plan.css?v=a618dac2bd"><link rel="stylesheet" href="twin-rack-guide.css"><link rel="stylesheet" href="twin-device-links.css?v=ce4eb35622"><link rel="stylesheet" href="twin-observe.css?v=7d526b4385">
+  <link rel="stylesheet" href="territory.css?v=07520d0e2a"><link rel="stylesheet" href="grid-connection.css?v=5bfdcd607c">
+  <link rel="stylesheet" href="twin-gpu-trace.css?v=67e1650e96">
+  <link rel="stylesheet" href="twin-power-tour.css?v=40263e0f1f"><link rel="stylesheet" href="twin-power-camera.css?v=c7f4e60672">
   <link rel="stylesheet" href="twin-cooling-detail.css?v=94766f2be6">
   <link rel="stylesheet" href="studio.css"><link rel="stylesheet" href="equipment/equipment.css"><link rel="stylesheet" href="equipment/fabric.css"><link rel="stylesheet" href="equipment/relations.css"><link rel="stylesheet" href="equipment/inspection.css">
   <script defer src="map-data.js"></script>
@@ -29,24 +31,27 @@
   <script defer src="twin-plan.js"></script>
   <script defer src="aidc/finance.js"></script>
   <script defer src="equipment/study.js"></script>
-  <script defer src="io.js"></script>
+  <script defer src="grid-connection.js?v=715463fee1"></script>
+  <script defer src="io.js?v=8d93d6508a"></script>
   <script defer src="station-view.js"></script>
-  <script defer src="nearby-data.js"></script>
+  <script defer src="nearby-data.js?v=cbaaf0b5ae"></script>
   <script defer src="nearby-ui.js"></script>
   <script defer src="twin-rack-circuit.js?v=a5e8624375"></script>
-  <script defer src="twin-cooling-route.js?v=036bbc9571"></script>
+  <script defer src="twin-gpu-routes.js?v=d9fcc6312b"></script>
+  <script defer src="twin-cooling-route.js?v=a3d803a507"></script>
   <script defer src="twin-rack-guide.js?v=2ce50e668e"></script>
-  <script defer src="twin-rack-view.js?v=411d8afcc3"></script>
-  <script defer src="twin-yard.js?v=a443405911"></script>
-  <script defer src="twin-device-links.js?v=a5c55a1aab"></script>
+  <script defer src="twin-rack-view.js?v=d9b9cd0aa3"></script>
+  <script defer src="twin-yard.js?v=c66d90de73"></script>
+  <script defer src="twin-device-links.js?v=09ddf89250"></script>
   <script defer src="twin-device-overlay.js?v=bd61c124d2"></script>
-  <script defer src="twin-power-camera.js?v=3e12b3f229"></script>
-  <script defer src="twin-power-tour.js?v=91e99f1056"></script>
-  <script defer src="twin-campus.js?v=73214844b5"></script>
-  <script defer src="twin-territory.js"></script>
+  <script defer src="twin-power-camera.js?v=bd2d72abd6"></script>
+  <script defer src="twin-power-tour.js?v=6b78b9b33d"></script>
+  <script defer src="twin-campus.js?v=bf08661484"></script>
+  <script defer src="territory-geo.js?v=ecf642fcf0"></script>
+  <script defer src="twin-territory.js?v=110e2760d9"></script>
   <script defer src="twin-cooling-detail.js?v=fa6f32d714"></script>
-  <script defer src="twin.js?v=ad1e6a6c66"></script>
-  <script defer src="app.js?v=adb4efd0fd"></script>
+  <script defer src="twin.js?v=e224bcf539"></script>
+  <script defer src="app.js?v=a93dd33a26"></script>
 </head>
 <body>
   <a href="#main" class="skip">跳到主要内容</a>
@@ -77,6 +82,7 @@
             <button type="button" id="tw-yard-open" class="tw-yard-entry">变电站</button>
             <button type="button" id="tw-tour-open" aria-controls="tw-power-tour">供电自动讲解</button>
             <button type="button" id="tw-cooling-tour-open" aria-controls="tw-cooling-picker tw-power-tour">冷却自动讲解</button>
+            <button type="button" id="tw-gpu-open" aria-controls="tw-gpu-trace">GPU 溯源</button>
             <button id="tw-expand" type="button" aria-label="全屏查看场景" title="全屏查看场景" aria-pressed="false"><i data-i="expand"></i></button></div>
           </div>
           <div class="tw-stage">
@@ -95,6 +101,20 @@
             <select id="tw-cooling-start-unit" aria-label="按编号选择讲解起点"></select>
             <button type="button" id="tw-cooling-pick-cancel">取消</button>
           </div>
+          <details id="tw-layout-review" class="tw-layout-review" hidden open>
+            <summary>园区排布核查</summary>
+            <dl><div><dt>规模与通道</dt><dd data-layout-counts></dd></div>
+            <div><dt>机电分区</dt><dd data-layout-systems></dd></div>
+            <div><dt>备用供电</dt><dd data-layout-emergency></dd></div>
+            <div><dt>深化设计待核</dt><dd>消防分区与疏散、设备运输和检修净距、油料保障、双路通信及监控点位需结合项目图纸核定。</dd></div></dl>
+            <div class="tw-review-links"><button type="button" id="tw-layout-emergency">查看备用供电区</button><a href="#aidc/layout">按设备清单核查机柜排布</a></div>
+          </details>
+          <section id="tw-grid-connection" aria-label="公共电网接入方案" hidden></section>
+          <section id="tw-gpu-trace" aria-label="GPU 供电与散热" hidden>
+            <div class="tgt-origin"><h3></h3><code></code><button id="tw-gpu-close" type="button" aria-label="关闭 GPU 溯源">关闭</button></div>
+            <p id="tw-gpu-hint"></p>
+            <div class="tgt-actions"><button type="button" id="tw-gpu-power" aria-pressed="false">追溯供电</button><button type="button" id="tw-gpu-cooling" aria-pressed="false">追踪回液</button><button type="button" id="tw-gpu-return">回到 GPU</button><button type="button" id="tw-gpu-default" hidden>查看本方案 GPU</button></div>
+          </section>
           <section id="tw-power-tour" hidden aria-label="供电自动讲解"></section>
           <section id="tw-cooling-inspect" hidden aria-label="冷却设备细看">
             <h3></h3><code></code><p></p>

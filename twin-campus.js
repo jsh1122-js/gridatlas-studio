@@ -9,6 +9,9 @@
   // Standalone facility groups use the red pick channel. Keep 16–19 for halls and existing equipment IDs intact.
   const firstCoolingPick=36,maxCoolingUnits=14;
   for(let i=0;i<maxCoolingUnits;i++)pickKeys[firstCoolingPick+i]='cooling-unit-'+(i+1);
+  const emergencyKeys=['emergency-diesel','emergency-transfer','emergency-transformer','emergency-load'];
+  for(const [i,key] of emergencyKeys.entries())pickKeys[firstCoolingPick+maxCoolingUnits+i]=key;
+  const emergencyNames={'emergency-diesel':'代表柴发机组','emergency-transfer':'双电源切换柜','emergency-transformer':'站用变','emergency-load':'应急配电箱'};
   const isCoolingPick=id=>id>=firstCoolingPick&&id<firstCoolingPick+maxCoolingUnits;
   const rackTypes={gb200:['GB200','#75daca'],gb300:['GB300','#e7b172'],pcie:['PCIe','#85b8e3']};
   const equipmentTitles={rowdist:'列头配电',pdu:'机柜配电',psu:'机柜 PSU',fan:'EC 风扇',network:'ToR 交换机','800v':'800 V 直流柜',rack:'IT 机柜',ups:'UPS 电源柜',sst:'SST 变换柜',hvdc:'直流电源柜',transformer:'隔离变压器',liquid:'液冷 CDU',air:'机房风冷',switchgear:'配电柜'};
@@ -145,6 +148,66 @@
     return {trace,world,rigTag:(id,role)=>{rigMeta=id?[id,role]:null;},setTransform:v=>{transform=v;},buffer,faces,face,polygon,rect,box,prism,beam,cylinder,circle,shadow,group:key=>{group=Math.max(0,pickKeys.indexOf(key));},part:(type,n=0,id=-1)=>{part=type;hall=n;instance=id;},rotor:(p)=>{pivot=p;}};
   }
 
+  function yardUnitCount(project,facility){
+    const units=project.gridConnection?.station?.units;
+    return Number.isSafeInteger(units)&&units>0?Math.min(4,units):clamp(Math.round(2+Math.log2(facility/80)),2,4);
+  }
+  function buildEmergencyPower(m,layout,anchors,utility){
+    const {box,cylinder,beam,rect}=m;
+    m.setTransform(null);m.part(0);
+    function pad(id,x,y,w,d){
+      m.group(id);layout.equipment.push({id,x0:x,y0:y,x1:x+w,y1:y+d});
+      box(x,y,.18,w,d,.34,'#77898f','#a4b0ad');
+    }
+    const diesel='emergency-diesel',transfer='emergency-transfer',service='emergency-transformer',load='emergency-load';
+    pad(diesel,32.0,28.22,8.5,2.98);
+    box(32.22,28.45,.52,8.04,2.50,.30,'#40525a','#6a797b');
+    box(32.30,28.47,.82,7.86,2.43,2.14,'#9aa899','#b5c0af');
+    // Acoustic enclosure, radiator intake, inspection doors, silencer and exhaust stack.
+    for(let i=0;i<11;i++)box(32.27,28.62+i*.19,1.11,.032,.10,1.47,'#485b61');
+    for(let i=0;i<12;i++)box(32.72+i*.17,30.90,1.05,.085,.035,1.58,'#4c5c60');
+    for(let i=0;i<3;i++){
+      const x=35.00+i*1.50;box(x,30.90,.98,1.37,.045,1.75,'#819187','#b1b9aa');
+      box(x+1.05,30.95,1.66,.17,.07,.21,'#3e5258','#9ea7a4');
+    }
+    beam([37.55,29.67,3.27],[39.10,29.67,3.27],.29,'#657578',10);
+    cylinder(38.97,29.67,3.30,.135,.66,'#59696c','#8a9999',8);
+    box(39.31,30.86,1.83,.69,.10,.52,'#4a5b62');box(39.41,30.97,2.03,.38,.03,.17,'#7faeab');
+    pad(transfer,44.65,28.65,2.75,2.45);
+    box(44.80,28.77,.52,2.44,2.17,2.40,'#748b94','#a4b2b6');
+    for(const x of [44.92,46.09]){box(x,30.95,.66,1.03,.055,2.08,'#526975','#97a7ac');box(x+.24,31.015,2.10,.48,.045,.21,'#34515a','#87a6a8');}
+    box(45.18,31.03,1.65,.22,.06,.12,'#80bda8');box(46.35,31.03,1.65,.22,.06,.12,'#a99574');
+    pad(service,56.2,28.62,3.22,2.48);
+    box(56.38,28.79,.52,2.86,2.10,1.90,'#748e93','#9caeae');
+    for(let i=0;i<10;i++)box(56.57+i*.25,30.91,.72,.105,.115,1.38,'#526d77','#839799');
+    for(const x of [56.74,57.80,58.85]){cylinder(x,29.55,2.42,.095,.34,'#64797c');cylinder(x,29.55,2.72,.15,.07,'#9aaba6');}
+    pad(load,50.05,28.78,2.12,2.12);
+    box(50.19,28.91,.52,1.83,1.83,2.07,'#607887','#96aaae');
+    box(50.28,30.75,.65,1.65,.055,1.74,'#758b91','#9aacad');box(50.52,30.81,1.77,.66,.045,.23,'#334d59');
+    const source=[54.26,20.48,3.78],primary=[59.22,29.34,1.45],secondary=[56.38,29.10,1.42];
+    const gen=[40.16,29.94,1.38],standby=[44.80,29.94,1.38],normal=[47.24,29.10,1.42];
+    const bus=[46.0,30.94,1.26],out=[51.05,30.74,1.24];
+    const feeds={};
+    function cable(id,from,to,points,tone){
+      m.group(to);utility(id,'emergency',points,.094,tone);
+      layout.utilities.at(-1).ends=[from,to];feeds[id]=points;
+    }
+    // Dedicated auxiliary tap off the shared MV bus. The service transformer isolates
+    // this auxiliary changeover from the hall feeders and the outdoor transformer primaries.
+    cable('emergency-normal-mv','switch-house',service,[source,[54.26,20.48,2.55],[61.64,20.48,2.55],[61.64,20.48,.78],[61.64,29.34,.78],[59.54,29.34,.78],[59.54,29.34,1.45],primary],'#a99973');
+    cable('emergency-normal-lv',service,transfer,[secondary,[55.77,29.10,1.42],[55.77,27.84,1.42],[47.78,27.84,1.42],[47.78,29.10,1.42],normal],'#a99973');
+    cable('emergency-standby',diesel,transfer,[gen,[40.72,29.94,1.38],[40.72,29.94,.78],[44.32,29.94,.78],[44.32,29.94,1.38],standby],'#b28867');
+    cable('emergency-load',transfer,load,[bus,[46.0,31.46,1.26],[51.05,31.46,1.26],out],'#94b9aa');
+    // Fixed normal-source contact and open standby contact, visible as an interlocked
+    // pair on the roof cutaway. No animated current is shown on the idle generator.
+    m.group(transfer);rect(44.94,28.92,2.12,1.75,2.929,'#405461');
+    const contact=[46.01,30.00,3.00];
+    beam([46.86,29.10,3.00],contact,.078,'#cfb27d',6);beam([45.12,29.94,3.00],[45.65,29.72,3.17],.073,'#bd956e',6);
+    beam(contact,[46.0,30.65,3.0],.073,'#91b8a5',6);
+    anchors[diesel]=[36.1,29.72,2.96];anchors[transfer]=contact;anchors[service]=[57.8,29.55,2.79];anchors[load]=[51.0,29.9,2.59];
+    return {keys:emergencyKeys.slice(),feeds,normal:[service,transfer,load],standby:[diesel,transfer,load],
+      note:'代表支路。正常电源经站用变，备用电源来自柴发，双电源切换柜择一送至应急配电箱。负荷范围、容量、台数及切换方式由专项设计确定。'};
+  }
   function buildCampus(project={},metrics={}){
     const config=project.config||{},it=Number(config.it)||100,pue=Number(config.pue)||1.25, density=Number(config.density)||50;
     const plan=campusPlan(metrics,it,density),halls=plan.dims.length,baseHeight=8.8+Math.min(2,Math.log10(it+1)*.66);
@@ -335,6 +398,7 @@
         const lanes=clamp(Math.ceil(Math.sqrt(hall.symbols*.52)),1,6),rackCount=Math.ceil(hall.symbols/lanes);
         const rowD=(d-20)/rackCount,laneW=(w-3.4)/lanes,rackW=Math.min(laneW*.60,2.8);
         const demoLane=Math.floor((lanes-1)/2),demoRow=Math.min(rackCount-1,Math.floor(rackCount*.55));
+        const waterRacks=[];
         let demo=null,waterRack=null;hall.rackPoints=[];hall.rowSources=[];
         for(let q=0;q<lanes;q++){
           const xx=x+1.7+q*laneW;
@@ -355,12 +419,15 @@
               m.part(10,b,q);m.group('rowdist');
               box(dx,dy,bz,ww,dd,3.18,'#627c85','#acb9bc');box(dx+.12,dy+dd,bz+.28,ww-.24,.13,2.6,'#47616c','#82989b');
               for(let z=0;z<5;z++)box(dx+.22,dy+dd+.13,bz+.46+z*.40,ww-.44,.08,.14,'#b39b77');
-              hall.rowSources[q]={pos:m.world([dx+ww*.5,dy+dd*.55,bz+3.2])};
+              hall.rowSources[q]={pos:m.world([dx+ww*.5,dy+dd*.55,bz+3.2]),inlet:[dx+ww*.34,dy+dd*.55,bz+3.18]};
             }
             if(q===demoLane&&j===demoRow){mark('rack',at);hall.rackType=style?profile:null;hall.demoRackIndex=id;demo={xx,yy,depth:rackD,id};}
             const rackProfile=profile||project.rackStudy?.profile||'gb200';
-            if(config.cooling!=='风冷'&&['gb200','gb300'].includes(rackProfile)&&(!waterRack||id===demo?.id))
-              waterRack={xx,yy,depth:rackD,id,profile:rackProfile};
+            if(config.cooling!=='风冷'&&['gb200','gb300'].includes(rackProfile)){
+              const branch={xx,yy,depth:rackD,id,row:q,profile:rackProfile};
+              waterRacks.push(branch);
+              if(!waterRack||id===demo?.id)waterRack=branch;
+            }
             m.part(4,b,id);m.group(rackKey);
             box(xx,yy,floor+.96,rackW,rackD,3.15,'#2e4959','#6c858e');
             box(xx+.15,yy-.02,floor+2.98,rackW-.3,.09,.12,'#63c4c5');
@@ -373,19 +440,9 @@
         m.group('it');
         m.part(12,b);
         // Service ladders, rack branches and overhead ducts follow the selected cooling system.
-        const liquid=config.cooling==='冷板液冷',hybrid=config.cooling!=='风冷'&&!liquid;
         for(let q=0;q<lanes;q++){
-          const xx=x+1.7+(q+1)*laneW-.78,hasWater=liquid||(hybrid&&q%2===0);
-          if(hasWater){
-            for(const [k,tone] of ['#4d989e','#ab9271'].entries()){
-              const px=xx+k*.25;
-              beam([px,y+2.1,floor+4.85],[px,y+d-16.0,floor+4.85],.13,tone,6);
-              for(let j=0;j<4;j++){
-                const yy=y+4.9+j*(d-25)/3;
-                beam([px,yy,floor+4.85],[px-.31,yy,floor+4.25],.08,tone,5);
-              }
-            }
-          }else{
+          const xx=x+1.7+(q+1)*laneW-.78;
+          if(!waterRacks.some(r=>r.row===q)||config.cooling==='混合冷却'&&q%2===1){
             box(xx-.33,y+2.7,floor+4.85,.73,d-19.4,.50,'#869ba3','#bbc4bf');
             for(let yy=y+4;yy<y+d-17;yy+=5.1)box(xx-.45,yy,floor+4.60,.96,.95,.25,'#71878c','#b7c6c7');
           }
@@ -399,7 +456,7 @@
         box(.5,14.5,z+.17,w-1,.18,.8,'#7f9197','#cad3ce');
         const conversion=config.architecture==='SST 800V 直流'?'sst':config.architecture==='交流 UPS'||!config.architecture?'ups':config.architecture==='800V 直流'?'800v':'hvdc';
         const cells=[
-          ['transformer',1.1,8.0,5.6,4.8],['switchgear',8.65,8.05,6.3,4.6],[conversion,17.15,7.9,6.45,5.0],
+          ...(conversion==='sst'?[]:[['transformer',1.1,8.0,5.6,4.8]]),['switchgear',8.65,8.05,6.3,4.6],[conversion,17.15,7.9,6.45,5.0],
           ['air',1.1,15.45,7.1,5.45]
         ];
         if(config.cooling!=='风冷')cells.push(['liquid',10.05,15.55,6.6,5.15]);
@@ -583,12 +640,24 @@
             powerCable('toConverter',[secondary,[3.90,9.30,tHigh],[3.90,trunkY,tHigh],[20.2,trunkY,tHigh],[20.2,10.3,tHigh],convertIn],.14,'#bc985f');
           }
           paths.converterInside=[convertIn,[20.2,10.3,z+2.84],[19.5,9.5,z+2.84],convertOut].map(port);
-          powerCable('rowInput',[convertOut,[19.5,9.5,tHigh+.22],[19.5,trunkY,tHigh+.22],[fromRowX,trunkY,tHigh+.22],[fromRowX,fromRowY,tHigh+.22],rowIn],.15,'#cfad77');
-          const rowSource=hall.rowSources[demoLane].pos;paths.rowOutputs={};
-          for(const feed of ['A','B']){
-            const output=[rowSource[0]+(feed==='A'?-.075:.075),rowSource[1],rowSource[2]+.035];
-            paths.rowOutputs[feed]=[port(rowIn),[output[0],output[1],output[2]-.12*hall.sz],output];
-          }
+          const rowInlets=hall.rowSources.map((row,q)=>q===demoLane?rowIn:row.inlet);
+          const feedEdges=new Set(),feedX=convertOut[0],trayZ=tHigh+.22;
+          paths.rows=hall.rowSources.map((row,q)=>{
+            const inlet=rowInlets[q];
+            const tees=[...new Set(rowInlets.map(p=>p[0]))].filter(v=>(v-feedX)*(v-inlet[0])<=0&&v!==feedX)
+              .sort((a,b)=>inlet[0]>=feedX?a-b:b-a);
+            const input=[convertOut,[feedX,convertOut[1],trayZ],[feedX,trunkY,trayZ],...tees.map(x=>[x,trunkY,trayZ]),[inlet[0],inlet[1],trayZ],inlet];
+            for(let j=1;j<input.length;j++){
+              const a=input[j-1],end=input[j],edge=a.join(',')+'>'+end.join(',');
+              if(!feedEdges.has(edge)){m.trace([a,end],9,.12,'#cfad77');feedEdges.add(edge);}
+            }
+            const outputs={};
+            for(const feed of ['A','B']){
+              const source=row.pos,output=[source[0]+(feed==='A'?-.075:.075),source[1],source[2]+.035];
+              outputs[feed]=[port(inlet),[output[0],output[1],output[2]-.12*hall.sz],output];
+            }
+            return {input:input.map(port),outputs};
+          });
           for(const [sign,rail] of [[-1,pA],[1,pB]]){
             const lateral=powerX+sign*.12,off=sign*.15;
             m.trace([[fromRowX+off,fromRowY,rowTop+.04],[fromRowX+off,fromRowY,tHigh],[lateral,fromRowY,tHigh],[lateral,tapY,tHigh],[lateral,tapY,tHigh-.66],[rail,tapY,tHigh-.66],[rail,pY,tHigh-.66],[rail,pY,rTop+.23]],9,.095,sign<0?'#d4af71':'#a98e6c');
@@ -599,15 +668,34 @@
           m.trace([[rx+.21,netY,rTop+.55],[rx+.21,netY,tHigh+.52],[dataX,netY,tHigh+.52],[dataX,opticY+.9,tHigh+.52],[opticX+1.05,opticY+.9,tHigh+.52],[opticX+1.05,opticY+.9,z+4.28]],13,.13,'#a78acc');
           // Liquid lines run on a third offset, with separate supply and return terminations at the rack manifold.
           if(waterRack){
-            const path=hall.coolingPaths,cold=path.secondaryCold,warm=path.secondaryWarm;
-            const edge=waterRack.xx+rackW,back=waterRack.yy+waterRack.depth,serviceX=edge+.93,tz=tHigh-.8;
-            const supply=[cold,[cold[0],cold[1],tz],[9.2,cold[1],tz],[9.2,6.75,tz],[serviceX,6.75,tz],
-              [serviceX,back+.55,tz],[serviceX,back+.55,rTop-.55],[edge+.01,back+.55,rTop-.55]];
-            const backflow=[[edge+.01,back+.87,rTop-.82],[serviceX+.27,back+.87,rTop-.82],[serviceX+.27,back+.87,tz],
-              [serviceX+.27,7.10,tz],[9.6,7.10,tz],[9.6,warm[1],tz],[warm[0],warm[1],tz],warm];
-            m.trace(supply,10,.14,'#54ada9');m.trace(backflow,12,.14,'#ae86aa');
-            path.supply=supply.map(m.world);path.return=backflow.map(m.world);
-            delete path.secondaryCold;delete path.secondaryWarm;
+            const exchanger=hall.coolingPaths,level=tHigh-.8;
+            hall.coolingByRack={};
+            for(const r of waterRacks)hall.coolingByRack[r.id]={rackIndex:r.id,profile:r.profile,
+              primarySupply:exchanger.primarySupply,primaryReturn:exchanger.primaryReturn};
+            // Split central headers and row spines at real tees. Each common pipe is drawn once.
+            const through=(values,start,end)=>[...new Set(values)].filter(v=>(v-start)*(v-end)<=0&&v!==start)
+              .sort((a,b)=>end>=start?a-b:b-a);
+            for(const isReturn of [false,true]){
+              const hx=isReturn?9.6:9.2,hy=isReturn?7.10:6.75,offset=isReturn?.87:.55;
+              const port=isReturn?exchanger.secondaryWarm:exchanger.secondaryCold;
+              const railX=r=>r.xx+rackW+.93+(isReturn?.27:0),teeY=r=>r.yy+r.depth+offset;
+              const rows=waterRacks.map(railX),drawn=new Set();
+              for(const r of waterRacks){
+                const sx=railX(r),ty=teeY(r),z=rTop-(isReturn?.82:.55);
+                const path=[port,[port[0],port[1],level],[hx,port[1],level],[hx,hy,level],
+                  ...through(rows,hx,sx).map(rx=>[rx,hy,level]),
+                  ...through(waterRacks.filter(other=>other.row===r.row).map(teeY),hy,ty).map(ry=>[sx,ry,level]),
+                  [sx,ty,z],[r.xx+rackW+.01,ty,z]];
+                if(isReturn)path.reverse();
+                hall.coolingByRack[r.id][isReturn?'return':'supply']=path.map(m.world);
+                for(let k=1;k<path.length;k++){
+                  const a=path[k-1],end=path[k],key=a.join(',')+'>'+end.join(',');
+                  if(drawn.has(key))continue;
+                  drawn.add(key);m.trace([a,end],isReturn?12:10,.11,isReturn?'#ae86aa':'#54ada9');
+                }
+              }
+            }
+            hall.coolingPaths=hall.coolingByRack[waterRack.id];
           }
           // Air travels through the supply plenum then the adjacent cold aisle to the representative rack intake.
           const low=z+.41,aisle=rx-.39;
@@ -701,9 +789,10 @@
       cylinder(60,y,1,1.65,3.9,'#7b9ca5','#bfcecf',16);
     }
     anchors.cooling=[44,-20,5.0];
-    const yardUnits=clamp(Math.round(2+Math.log2((Number(metrics.facility)||it*pue)/80)),2,4);
+    const yardUnits=yardUnitCount(project,Number(metrics.facility)||it*pue);
     const yard=GridYard.build(m,anchors,yardUnits,halls);layout.station=rectFootprint('substation',29,2.6,33,24);
     layout.equipment.push(...yard.footprints);
+    layout.emergency=buildEmergencyPower(m,layout,anchors,utility);
     // The north–south service road is crossed in sleeves below its paving. Both shoulders remain clear.
     const ductY=25.78,ductStep=.47;
     m.part(0);m.group('none');
@@ -741,12 +830,14 @@
         m.part(0);m.group('none');
       }
     }
-    const model={plan,layout,coolingBounds,coolingParts,vertices:new Float32Array(m.buffer),faces:m.faces,anchors,routes};
+    const model={plan,layout,coolingBounds,coolingParts,transformerCount:yard.transformers.length,vertices:new Float32Array(m.buffer),faces:m.faces,anchors,routes};
     model.getCoolingTour=(options={},openIndex=0)=>GridCoolingRoute.plan(model,options,openIndex);
     model.getPowerTour=(options={},openIndex=0)=>{
       const index=clamp(Number.isInteger(openIndex)?openIndex:0,0,halls-1),hall=plan.dims[index],p=hall.powerPaths;
       const branchIndex=clamp(Math.trunc(Number(options.yardUnit)||1)-1,0,yard.transformers.length-1);
-      const main=yard.transformers[branchIndex],feeder=yard.feeders[p.feederIndex],rack=hall.rackPoints[p.rackIndex];
+      const rackIndex=options.rackIndex??p.rackIndex,rack=hall.rackPoints[rackIndex];
+      if(!Number.isInteger(rackIndex)||!rack)return null;
+      const row=p.rows[rack.rowIndex],main=yard.transformers[branchIndex],feeder=yard.feeders[p.feederIndex];
       const profile=rack.key.split(':')[1]||project.rackStudy?.profile||'gb200';
       const modules=profile==='pcie'?2*Math.min(4,project.rackStudy?.servers||6):4;
       const slot=clamp(Math.trunc(Number(options.slot)||(options.feed==='B'?2:1)),1,modules),feed=slot%2?'A':'B';
@@ -772,18 +863,19 @@
       if(p.toTransformer)stop('transformer','机房配电变压器','机房中压进线接至配变高压侧。绕组经磁场耦合，低压交流从另一组端子引出。','hall',[cable(p.toTransformer),transfer(p.transformerInside)]);
       const explanation={ups:'配变送入低压交流，UPS 在本方案中向列级配电输出连续交流。',sst:'中压交流直接接至 SST，在功率电子变换与高频隔离后输出 800 V 直流。','800v':'工频配变的交流输出送至集中整流装置，得到 800 V 直流。',hvdc:'工频配变输出交流，集中式 HVDC 整流后向直流母线送电。'}[p.conversion];
       stop(p.conversion,titles[p.conversion],explanation+'柜内段按原理示意。','hall',[cable(p.toConverter),transfer(p.converterInside)]);
-      stop('rowdist','第 '+(rack.rowIndex+1)+' 列'+(ac?'交流列头柜':'直流列端配电柜'),'沿设施输出桥架到这一列机柜的进线端。本次跟随 '+feed+' 路支路，柜内按母排与分支端子示意。','hall',[cable(p.rowInput),enclosed(p.rowOutputs[feed])]);
-      return {hallIndex:index,hallNumber:hall.index+1,rackIndex:p.rackIndex,profile,slot,feed,yardUnit:branchIndex+1,architecture:config.architecture||'交流 UPS',stops};
+      stop('rowdist','第 '+(rack.rowIndex+1)+' 列'+(ac?'交流列头柜':'直流列端配电柜'),'沿设施输出桥架到这一列机柜的进线端。本次跟随 '+feed+' 路支路，柜内按母排与分支端子示意。','hall',[cable(row.input),enclosed(row.outputs[feed])]);
+      return {hallIndex:index,hallNumber:hall.index+1,rackIndex,profile,slot,feed,yardUnit:branchIndex+1,architecture:config.architecture||'交流 UPS',stops};
     };
     const rigCache=new Map();
     model.getRackRig=(rig,apply=true)=>{
       if(!rig||!Number.isInteger(rig.hallIndex)||!Number.isInteger(rig.rackIndex)||!rig.topology)return null;
       const hall=plan.dims[rig.hallIndex],rack=hall?.rackPoints[rig.rackIndex];if(!rack)return null;
-      const t=rig.topology,signature=[rig.hallIndex,rig.rackIndex,t.id,t.profile,t.architecture,t.modules?.length,t.servers?.length,t.perServer,rig.boardServerId||'',Boolean(rig.cooling)].join('/');
+      const t=rig.topology,signature=[rig.hallIndex,rig.rackIndex,t.id,t.profile,t.architecture,t.modules?.length,t.servers?.length,t.perServer,rig.boardServerId||'',Boolean(rig.cooling),Boolean(rig.dualGpuId)].join('/');
       let entry=rigCache.get(signature);
       if(!entry){
         entry=buildRackRig(hall,rack,rig);
-        if(rigCache.size>=2)rigCache.delete(rigCache.keys().next().value);
+        // Keep the board's power, cooling and combined meshes through a route switch.
+        if(rigCache.size>=3)rigCache.delete(rigCache.keys().next().value);
         rigCache.set(signature,entry);
       }
       if(apply)entry.updateState(rig);
@@ -962,7 +1054,7 @@
     const source=hall.rowSources[rack.rowIndex]?.pos||hall.points.rowdist;
     if(source)anchors[t.rowdist.id]=source;
     item(t.rowdist);
-    const boardEdges=board&&!request.cooling?t.boardEdges.filter(e=>e.from===board):[];
+    const boardEdges=board&&(!request.cooling||request.dualGpuId)?t.boardEdges.filter(e=>e.from===board):[];
     for(const e of [...t.edges,...boardEdges]){
       const from=lookup.get(e.from),to=lookup.get(e.to);if(!from||!to)continue;
       if(from.kind==='rowdist'&&to.kind==='pdu'&&source){
@@ -981,7 +1073,7 @@
         wire(e,[[.91,6.64,busZ],[.85,6.64,busZ],[.85,6.64,zz],[.64,6.86,zz],dst],.057,'#9f9787');
       }else if(from.kind==='server'&&to.kind==='gpu'&&gpuLocations[to.id]){
         const dst=gpuLocations[to.id],src=serverPorts[from.id],plane=low+from.index*unitH+.255;
-        const lane=6.33-to.index*.105,x=dst[0]-.72;
+        const lane=6.33-to.index*.105,x=dst[0]-.72-(pcie?0:.17*(to.index%2));
         const regZ=pcie?dst[2]-.16:plane+.18;
         item(to);
         // The regulator beside this package is drawn on the PCIe card or on the NVL tray board.
@@ -992,14 +1084,14 @@
           box(x-.14,dst[1]-.14,plane,.28,.28,.18,'#676a60','#a79774');
           box(x+.16,dst[1]-.10,plane,.17,.20,.08,'#343f41','#61716b');
         }
-        wire(e,[src,[.37,src[1],src[2]],[.37,lane,plane],[x,lane,plane],[x,dst[1],plane],[x,dst[1],regZ],[x+.17,dst[1],regZ],[dst[0],dst[1],regZ],dst],.035,'#d6a76d');
+        wire(e,[src,[.37,src[1],src[2]],[.37,lane,plane],[x,lane,plane],[x,dst[1],plane],[x,dst[1],regZ],[x+.17,dst[1],regZ],[dst[0],dst[1],regZ],dst],request.dualGpuId ? .057 : .035,'#d6a76d');
       }
     }
     // In the unfolded inspection view the tray hoses remain attached to their modeled
     // quick couplings. The tour reads the very same centerlines used to emit each tube.
     function buildCoolingBranch(){
-      const feed=hall.coolingPaths,server=servers.find(s=>s.id===board);
-      if(!request.cooling||pcie||!server||feed?.rackIndex!==id||!feed.supply?.length||!feed.return?.length)return null;
+      const feed=hall.coolingByRack?.[id]||hall.coolingPaths,server=servers.find(s=>s.id===board);
+      if((!request.cooling&&!request.dualGpuId)||pcie||!server||feed?.rackIndex!==id||!feed.supply?.length||!feed.return?.length)return null;
       const chips=t.gpus.filter(g=>g.serverId===server.id),partById=new Map(),branches={};
       const cold='#4fbab9',warm='#c483aa',brass='#ba9270';
       const local=p=>[(p[0]-xf.dx)/xf.sx,(p[1]-xf.dy)/xf.sy,(p[2]-xf.oz)/xf.sz];
@@ -1024,7 +1116,9 @@
         const top=[tap[0],tap[1],Math.max(17.25,port[2])],elbow=[top[0],port[1],top[2]];
         const leg=[port,[port[0],port[1],top[2]],elbow,top,tap];
         const path=tube(n,isReturn?leg.reverse():leg,.125,tone);
-        tube(n,[tap,[tap[0],tap[1],.80]],.125,tone);
+        // Tracing this tap toward the CDU uses only the portion above the tap.
+        const tail=isReturn?fitting(t,'MR-LOW','回液歧管下段','return','rack',tap):n;
+        tube(tail,[tap,[tap[0],tap[1],.80]],.125,tone);
         for(const tray of servers){
           const z=low+tray.index*unitH+(isReturn?.44:.24);
           beam([tap[0]-.24,tap[1],z],[tap[0],tap[1],z],.105,'#98aaad',8);
@@ -1046,9 +1140,15 @@
       // ending at that plate, so a branch never detours to a neighboring GPU.
       const positions=chips.map(g=>{const [x,y]=gpuLocations[g.id],row=g.index%2;
         return {g,x,y,sx:x-.68-.15*row,rx:x+.61+.15*row};});
+      const hotHeaderIds=[];
       function header(start,n,axis,tone){
         const tees=[start,...positions.map(p=>[p[axis],start[1],start[2]]).sort((a,b)=>b[0]-a[0])];
-        tube(n,tees,.065,tone);
+        if(n===hoseR){
+          for(let i=1;i<tees.length;i++){
+            const part=fitting(server,'RH-'+i,'托盘回液集管','return','server',tees[i]);
+            tube(part,[tees[i-1],tees[i]],.065,tone);hotHeaderIds.push(part.id);
+          }
+        }else tube(n,tees,.065,tone);
         return x=>tees.slice(0,tees.findIndex(p=>p[0]===x)+1);
       }
       const supplyTee=header(boardS,hoseS,'sx',cold),returnTee=header(boardR,hoseR,'rx',warm);
@@ -1064,8 +1164,11 @@
         const mid=[x,y,channel],sTee=supplyTee(sx),rTee=returnTee(rx);
         const supply=[[sx,boardS[1],deck],[sx,y+.21,deck],[x-.40,y+.21,channel],[x+.22,y+.21,channel],[x+.22,y,channel],mid];
         const ret=[mid,[x-.22,y,channel],[x-.22,y-.21,channel],[x+.40,y-.21,channel],[rx,y-.21,boardR[2]],[rx,boardR[1],boardR[2]]];
-        tube(plate,supply,.044,cold);tube(plate,ret,.044,warm);
-        branches[g.id]={plate,chipSupply:worldPath([...sTee,...supply.slice(1)]),
+        const inlet=fitting(g,'CP-IN',g.label+' 冷板供液支管','supply','gpu',supply[1]);
+        const outlet=fitting(g,'CP-OUT',g.label+' 冷板回液支管','return','gpu',ret[4]);
+        inlet.gpuNumber=outlet.gpuNumber=g.number;
+        tube(inlet,supply,.044,cold);tube(outlet,ret,.044,warm);
+        branches[g.id]={plate,returnIds:[plate.id,outlet.id,...hotHeaderIds.slice(0,rTee.length-1),hoseR.id,manifoldR.id],chipSupply:worldPath([...sTee,...supply.slice(1)]),
           chipReturn:worldPath([...ret,...rTee.slice(0,-1).reverse()])};
       }
       return {manifoldS,manifoldR,hoseS,hoseR,rackSupply,traySupply,trayReturn,rackReturn,branches,partById};
@@ -1075,18 +1178,22 @@
     const first=hall.rackPoints[0].pos,nextLane=hall.rackPoints[perLane]?.pos||first,nextColumn=perLane>1?hall.rackPoints[1].pos:first;
     const grid=[first[0],first[1],nextLane[0]-first[0],nextColumn[1]-first[1]];
     const extractionVector=[-size[0]*.54,0,0],palette=new Uint8Array(256*4);
-    let priorPath,priorStep;
+    let priorPath,priorStep,priorGpu;
     const geometry={vertices:new Float32Array(m.buffer),faces:m.faces,assets,anchors,edgePoints,cooling,boardBounds,center,size,grid,perLane,frontYaw:-Math.PI/2,hinge:hinges[0],hinges,
       extractionVector,selectedIndex:0,selectedId:null,ownerRow:rack.rowIndex,rowRole:0,rowLocal:map.get(t.rowdist.id),doorId:doorNode.id,palette,stateVersion:0,
       updateState(rig){
-        if(geometry.stateVersion&&priorPath===rig.highlight&&priorStep===rig.highlightStep&&geometry.selectedId===rig.selectedId)return;
-        priorPath=rig.highlight;priorStep=rig.highlightStep;geometry.selectedId=rig.selectedId;geometry.selectedIndex=map.get(rig.selectedId)||0;
+        if(geometry.stateVersion&&priorPath===rig.highlight&&priorStep===rig.highlightStep&&priorGpu===rig.dualGpuId&&geometry.selectedId===rig.selectedId)return;
+        priorPath=rig.highlight;priorStep=rig.highlightStep;priorGpu=rig.dualGpuId;geometry.selectedId=rig.selectedId;geometry.selectedIndex=map.get(rig.selectedId)||0;
+        const heat=new Set(cooling?.branches[rig.dualGpuId]?.returnIds);
         const ids=new Set(rig.highlight||[]);
         for(let i=1;i<assets.length;i++){
           const n=assets[i];
           const inPath=n.kind==='cable'?ids.has(n.from)&&ids.has(n.to):ids.has(n.id);
           const upstream=n.kind==='cable'?n.upstream:n.kind==='rowdist'||n.kind==='pdu';
-          palette[i*4]=n.id===rig.highlightStep?4:n.id===rig.selectedId?3:inPath?(upstream?1:2):0;
+          if(rig.dualGpuId){
+            const adjacent=n.kind==='gpu'||n.kind==='cable'||n.kind==='coolant';
+            palette[i*4]=heat.has(n.id)?2:n.id===rig.dualGpuId?4:inPath&&n.kind!=='server'?1:adjacent?5:0;
+          }else palette[i*4]=n.id===rig.highlightStep?4:n.id===rig.selectedId?3:inPath?(upstream?1:2):0;
         }
         geometry.rowRole=palette[geometry.rowLocal*4];geometry.stateVersion++;
       },
@@ -1282,7 +1389,9 @@
           float fill=.77+.24*max(dot(n,eye),0.)+.12*top+.08*nd;
           col=vColor*fill+vec3(.021,.034,.042)+.11*pow(max(dot(n,h),0.),18.);
         }
-        if(role>.5){
+        if(role>4.5){
+          float gray=dot(col,vec3(.23,.57,.20));col=mix(vec3(gray*.63,gray*.75,gray*.79),col,.12);
+        }else if(role>.5){
           vec3 tone=role<1.5?vec3(.99,.56,.19):role<2.5?vec3(.18,.86,.76):role<3.5?vec3(1.,.78,.30):vec3(.76,.91,1.);
           col=mix(col,tone,role>=2.5?.60:.49)+tone*(.11+.15*fres);
         }
@@ -1417,7 +1526,13 @@
       const sx=width/cam.width,sy=height/cam.height,active=cam.rig;
       const rig=model.getRackRig(active);
       const roles=[null,[1,.57,.20],[.18,.87,.77],[1,.78,.30],[.78,.91,1]];
-      function wash(rgb,role){const target=roles[role];return colorWord(rgb.map((v,k)=>target?v*(role>=3?.55:.68)+target[k]*(role>=3?.59:.40):v*1.06+.024),false);}
+      function wash(rgb,role){
+        if(role===5){
+          const gray=.23*rgb[0]+.57*rgb[1]+.20*rgb[2];
+          return colorWord(rgb.map((v,k)=>gray*[.63,.75,.79][k]*.88+v*.12),false);
+        }
+        const target=roles[role];return colorWord(rgb.map((v,k)=>target?v*(role>=3?.55:.68)+target[k]*(role>=3?.59:.40):v*1.06+.024),false);
+      }
       if(rig!==detail||rig&&rig.stateVersion!==paletteVersion){
         detail=rig;
         if(detail){
@@ -1540,8 +1655,40 @@
     const cameraKeys=['yaw','pitch','zoom','fx','fy','fz'];
     let queuedRack,pendingMove=null,focusSignature='',projectionSignature='',labelSignature='',rackRevision=0,rackOrigin=null,nextRackOrigin=null;
     const shortestAngle=(from,to)=>from+Math.atan2(Math.sin(to-from),Math.cos(to-from));
-    let tourPlan=null,tourModel=null,layoutView=false;
+    let tourPlan=null,tourModel=null,layoutView=false,gpuRoutes=null;
     const hallPins=[];
+    const emergencyPin=document.createElement('button');emergencyPin.type='button';emergencyPin.className='tw-layout-hall';emergencyPin.hidden=true;
+    emergencyPin.dataset.emergencyPin='';emergencyPin.setAttribute('aria-label','查看园区备用供电代表支路');wrapper.append(emergencyPin);
+    const emergencyNote=document.createElement('div');emergencyNote.dataset.emergencyInfo='';emergencyNote.hidden=true;
+    emergencyNote.style.cssText='padding:8px 12px;color:#e3eddf;background:#233638;font-size:.84rem;line-height:1.6;';
+    const emergencyCaption=document.createElement('span'),emergencyBack=document.createElement('button');
+    emergencyBack.type='button';emergencyBack.textContent='返回总平面';emergencyBack.style.marginLeft='8px';
+    emergencyNote.append(emergencyCaption,emergencyBack);(container.closest('.tw-stage')||container).after(emergencyNote);
+    emergencyBack.onclick=()=>setLayoutView(true);
+    emergencyPin.onclick=()=>showEmergency(emergencyKeys.includes(focusKey)?focusKey:'emergency-diesel',emergencyKeys.includes(focusKey));
+    function showEmergency(key='emergency-diesel',close=false){
+      if(!emergencyKeys.includes(key)||mode!=='campus')return false;
+      if(!model||dirty)rebuild();
+      if(layoutView)setLayoutView(false);
+      cancelPendingMove();const support=model.layout.emergency;
+      focusKey=key;focusSignature='';lastPick=null;aim=[...model.anchors[key],pickKeys.indexOf(key)];
+      const item=model.layout.equipment.find(n=>n.id===key);
+      const pts=close?[[item.x0-2.5,item.y0-1.5,.2],[item.x1+2.5,item.y1+1.5,3.9],model.anchors[key]]:
+        [...support.keys.map(id=>model.anchors[id]),[31.7,28.1,.35],[61.7,20.4,3.8],[61.7,31.5,.35]];
+      rackCamera({pts,angle:.23,pitch:.77,kind:'circuit'});
+      emergencyCaption.textContent=emergencyNames[key]+' · '+support.note;
+      return true;
+    }
+    function positionEmergency(){
+      const active=emergencyKeys.includes(focusKey),allowed=mode==='campus'&&!wrapper.closest('.tw-following,.tw-observing');
+      emergencyNote.hidden=!active||!allowed;
+      if(!allowed||!layoutView&&!active){emergencyPin.hidden=true;return;}
+      const key=active?focusKey:'emergency-diesel',point=projectPoint(model.anchors[key],cam);
+      emergencyPin.hidden=point[0]<8||point[0]>cam.width-8||point[1]<12||point[1]>cam.height-12;
+      const title=active?emergencyNames[key]:(cam.width<600?'备电':'备用供电区');
+      if(emergencyPin.textContent!==title)emergencyPin.textContent=title;
+      emergencyPin.style.left=point[0]+'px';emergencyPin.style.top=(point[1]-15)+'px';
+    }
     const tourCamera=GridPowerCamera.mount(wrapper,{pose:()=>({yaw,pitch,zoom,fx,fy,fz}),requestDraw,onInspect:step=>options.onTourInspect?.(step)});
     const rackView=GridRackView.mount(wrapper,{
       getRoom:()=>({project,model,hallIndex:openIndex}),
@@ -1556,6 +1703,8 @@
         cancelTravel();focusKey=null;focusSignature='';aim=[0,0,0,0];
         wanted={...view.camera};requestDraw();
       },
+      onGpuPick:selection=>options.onGpuPick?.(selection),
+      onGpuTrace:(kind,selection)=>options.onGpuRoute?.(kind,selection),
       redraw:requestDraw,onChange:state=>{rackRevision++;options.onRackChange?.(state);}
     });
     function rackCamera({pts,angle,pitch:tilt,kind}){
@@ -1596,6 +1745,13 @@
         pin.style.left=p[0]+'px';pin.style.top=p[1]+'px';
       }
     }
+    function getLayoutReview(){
+      if(dirty||!model)rebuild();
+      const {plan,layout}=model;
+      return {halls:plan.halls,shown:plan.dims.length,racks:plan.racks,shownRacks:plan.dims.reduce((n,h)=>n+h.rackPoints.length,0),
+        liquidRacks:plan.dims.reduce((n,h)=>n+Object.keys(h.coolingByRack||{}).length,0),mainUnits:model.transformerCount,
+        hallFeeders:layout.utilities.filter(u=>/^feeder-\d+-0$/.test(u.id)).length,roads:layout.roads.length,emergency:layout.emergency};
+    }
     function preparePowerTour(settings={}){
       if(dirty||!model)rebuild();
       const hall=model.getPowerTour(settings,openIndex);
@@ -1628,6 +1784,72 @@
       tourPlan={...hall,kind:'cooling',stops,cabinet};tourModel=model;
       return stops;
     }
+    function openGpuTrace(target={}){
+      if(dirty||!model)rebuild();
+      const halls=model.plan.dims;
+      let hallIndex=target.hallIndex??openIndex,rackIndex=target.rackIndex;
+      let serverNumber=target.serverNumber,gpuNumber=target.gpuNumber;
+      let trayType;
+      if(target.gpuId){
+        const match=/^H(\d+)-R(\d+)-([ST])(\d+)-G(\d+)$/.exec(target.gpuId);
+        if(!match)return null;
+        hallIndex=halls.findIndex(h=>h.index+1===Number(match[1]));
+        rackIndex=Number(match[2])-1;trayType=match[3];
+        serverNumber=Number(match[4]);gpuNumber=Number(match[5]);
+      }
+      if(!Number.isInteger(hallIndex)||!halls[hallIndex])return null;
+      const hall=halls[hallIndex];
+      if(rackIndex==null)rackIndex=(rackView.rig?.hallIndex===hallIndex? rackView.rig.rackIndex:null)??hall.coolingPaths?.rackIndex??hall.powerPaths.rackIndex;
+      const rack=hall.rackPoints[rackIndex];
+      if(!Number.isInteger(rackIndex)||!rack)return null;
+      const pcie=(rack.key.split(':')[1]||project.rackStudy?.profile)==='pcie';
+      if(trayType&&trayType!==(pcie?'S':'T'))return null;
+      serverNumber??=pcie?1:9;
+      gpuNumber??=pcie?1:2;
+      const slot=target.slot??(pcie?serverNumber*2-1:1);
+      const branch={hallIndex,rackIndex,serverNumber,gpuNumber,slot};
+      const cabinet=rackView.getJourneyPlan(branch);
+      if(!cabinet||target.gpuId&&target.gpuId!==cabinet.stops.at(-1).nodeId)return null;
+      if(target.yardUnit!=null&&(!Number.isInteger(target.yardUnit)||target.yardUnit<1||target.yardUnit>model.transformerCount))return null;
+      if(target.coolingUnit!=null&&(!Number.isInteger(target.coolingUnit)||!model.coolingParts['cooling-unit-'+target.coolingUnit]))return null;
+      if(layoutView)setLayoutView(false);
+      cancelTravel();cancelPendingMove();queuedRack=null;focusKey=null;focusSignature='';returnView=null;lastPick=null;
+      if(openIndex!==hallIndex){rackView.clear();openIndex=hallIndex;cuts.fill(0);options.onHallChange?.(hall.index);}
+      const selected=rackView.selectGpu(branch);
+      if(!selected)return null;
+      return {...selected,yardUnit:target.yardUnit??1,coolingUnit:target.coolingUnit??1};
+    }
+    function setGpuContext(target){
+      if(dirty||!model)rebuild();
+      if(!target)return null;
+      const {hallIndex,rackIndex,slot,serverNumber,gpuNumber,yardUnit,coolingUnit,gpuId}=target;
+      const branch={hallIndex,rackIndex,slot,serverNumber,gpuNumber};
+      const signature=[gpuId,hallIndex,rackIndex,slot,yardUnit,coolingUnit].join('/');
+      if(!gpuRoutes||gpuRoutes.signature!==signature||gpuRoutes.model!==model){
+        const powerHall=model.getPowerTour({...branch,yardUnit},hallIndex),powerRack=rackView.getJourneyPlan(branch);
+        const coolingHall=model.getCoolingTour({...branch,coolingUnit},hallIndex);
+        const routes=GridGpuRoutes.build({powerHall,powerRack,coolingHall,coolingRack:coolingHall&&rackView.getCoolingJourneyPlan(branch)});
+        if(routes.gpuId!==gpuId)return null;
+        gpuRoutes={...routes,signature,model};
+        const bounds=model.plan.dims[hallIndex].rackPoints[rackIndex];
+        tourCamera.setGpuContext(routes,bounds.max[2]-bounds.min[2]);
+        requestDraw();
+      }
+      return gpuRoutes;
+    }
+    function prepareGpuTrace(target,kind){
+      const plan=setGpuContext(target)?.[kind];
+      if(!plan)return [];
+      tourPlan=plan;tourModel=model;
+      return plan.stops;
+    }
+    function clearGpuTrace(){gpuRoutes=null;tourCamera.setGpuContext(null);rackView.clearGpuSelection();requestDraw();}
+    function getGpuPickProjection(){
+      const local=rackView.getGpuPickPoints();
+      if(!local||!cam)return null;
+      const project=p=>{const [x,y]=projectPoint(p,cam);return {x,y};};
+      return {gpuId:local.gpuId,power:local.power.map(project),cooling:local.cooling.map(project)};
+    }
     function setTourStop(step){
       if(dirty)rebuild();
       if(!tourPlan||model!==tourModel||!tourPlan.stops.includes(step))return false;
@@ -1641,7 +1863,7 @@
           if(!rackView.prepareCoolingJourney(branch)||!rackView.setCoolingStep(step))return false;
         }else{
           if(!rackView.prepareJourney({...branch,slot}))return false;
-          rackView.setJourneyStep(step.key);
+          rackView.setJourneyStep(step.rigKey||step.key);
         }
         rackView.cancelTour();
       }else if(rackView.rig)rackView.clear();
@@ -1906,6 +2128,7 @@
     function handleHit(hit){
       const key=typeof hit==='string'?hit:hit?.key;
       if(!key)return;
+      if(mode==='campus'&&emergencyKeys.includes(key)){showEmergency(key,true);return;}
       if(mode==='cutaway'&&rackView.hit(hit))return;
       if(mode==='cutaway'&&(key==='rack'||key.startsWith('rack:')||key==='psu')){
         openRack(key==='psu'?1:null,typeof hit==='object'?hit.rack:undefined);return;
@@ -1947,8 +2170,14 @@
     zoneDock.style.cssText='display:none;align-items:center;flex-wrap:wrap;gap:6px;padding:5px 8px;background:#102330';
     (container.closest('.tw-stage')||container).after(zoneDock);
     function positionLabels(){
+      positionEmergency();
       const focusedZone=document.activeElement?.dataset.zone?document.activeElement:null;
       if(layoutView)layoutLabels();
+      if(emergencyKeys.includes(focusKey)){
+        zoneDock.style.display='none';hallInfo.hidden=true;hallInfo.style.display='none';
+        for(const lab of Object.values(labels))lab.style.display='none';
+        return;
+      }
       if(rackView.rig){
         zoneDock.style.display='none';
         for(const l of Object.values(labels))l.style.display='none';
@@ -2021,7 +2250,7 @@
     }
     function rebuild(){
       const c=project.config||{};
-      const sig=JSON.stringify([c.it,c.pue,c.density,c.cooling,c.architecture,metrics.facility,metrics.racks,metrics.layout,project.rackMix,project.rackStudy,project.id]);
+      const sig=JSON.stringify([c.it,c.pue,c.density,c.cooling,c.architecture,metrics.facility,metrics.racks,metrics.layout,project.rackMix,project.rackStudy,project.gridConnection?.station,project.id]);
       if(sig!==signature||!model){
         rackView.clear();signature=sig;model=buildCampus(project,metrics);renderer.upload(model);
         openIndex=clamp(openIndex,0,model.plan.dims.length-1);
@@ -2080,13 +2309,13 @@
       const ca=Math.cos(yaw),sa=Math.sin(yaw),sp=Math.sin(pitch),cp=Math.cos(pitch);
       const scale=Math.min(width/190,height/Math.max(107,15+165*sp))*zoom;
       const waterFocus=followingWater||focusKey==='liquid'||focusKey?.startsWith('cooling-unit-');
-      const channel=waterFocus?2:!focusKey?0:focusKey==='air'||focusKey==='fan'?3:focusKey==='network'?4:focusKey.startsWith('sub-')||focusKey.startsWith('rack')?5:1;
-      cam={width,height,cx:width*.5-(fx*ca-fy*sa)*scale,cy:height*.535-((fx*sa+fy*ca)*sp-fz*cp)*scale,scale,ca,sa,sp,cp,cut,time:activeTime,load,highlight,cuts,aim,rig:rackView.rig,circuit:followingWater?circuitIds.liquid:circuitIds[circuit],observing:channel};
+      const channel=waterFocus?2:!focusKey?0:focusKey==='air'||focusKey==='fan'?3:focusKey==='network'?4:focusKey.startsWith('sub-')||focusKey.startsWith('rack')||emergencyKeys.includes(focusKey)?5:1;
+      cam={width,height,cx:width*.5-(fx*ca-fy*sa)*scale,cy:height*.535-((fx*sa+fy*ca)*sp-fz*cp)*scale,scale,ca,sa,sp,cp,cut,time:activeTime,load,highlight,cuts,aim,rig:rackView.rig,circuit:followingWater?circuitIds.liquid:gpuRoutes?circuitIds.all:circuitIds[circuit],observing:channel};
       const bgKey=[width,height,scale.toFixed(4),yaw.toFixed(4),pitch.toFixed(4),cam.cx.toFixed(2),cam.cy.toFixed(2)].join(',');
       if(bgKey!==groundKey){drawGround(ground,cam);groundKey=bgKey;}
       renderer.draw(cam,selected);
       tourCamera.draw(cam,projectPoint);
-      const r=rackView.rig,projectionKey=[bgKey,mode,openIndex,signature,focusSignature,selected,r?.rackIndex,r?.selectedId,r?.extraction].join('|');
+      const r=rackView.rig,projectionKey=[bgKey,mode,openIndex,signature,focusKey,focusSignature,selected,r?.rackIndex,r?.selectedId,r?.extraction].join('|');
       const labelKey=[projectionKey,circuit,cut<.48,rackRevision].join('|');
       if(labelKey!==labelSignature){labelSignature=labelKey;positionLabels();}
       if(options.onProjectionChange&&projectionKey!==projectionSignature){projectionSignature=projectionKey;options.onProjectionChange();}
@@ -2160,15 +2389,16 @@
     requestDraw();
     return {update(data={}){project=data.project||{};metrics=data.metrics||{};dirty=true;requestDraw();},
       setMode(value){if((value==='cutaway'||value==='campus')&&mode!==value){if(layoutView)setLayoutView(false);rackView.clear();queuedRack=null;mode=value;cutTarget=value==='cutaway'?1:0;focus(selected);requestDraw();}},
-      setLayoutView,
+      setLayoutView,getLayoutReview,showEmergency,
       setPlaying(value){const next=Boolean(value);if(next!==playing){playing=next;prev=0;requestDraw();}},
       setCircuit(key){if(Object.hasOwn(circuitIds,key)&&key!==circuit){clearEquipmentFocus();rackView.clear();circuit=key;requestDraw();}},
       openRack,closeRack:rackView.leave,selectRackSlot:rackView.selectSlot,toggleRackView:rackView.toggleView,
       toggleRackDoor:rackView.toggleDoor,toggleRackExtract:rackView.toggleExtract,focusRackStep:rackView.focusStep,
       focusEquipment,moveToEquipment,getEquipmentProjection,getCoolingPartProjection,clearEquipmentFocus,getViewState,restoreViewState,
+      openGpuTrace,setGpuContext,prepareGpuTrace,clearGpuTrace,getGpuPickProjection,
       preparePowerTour,prepareCoolingTour,followPowerTour,inspectTourLoad,haltPowerTour(clear=false){tourCamera.halt(clear);},
       setSelected(key){select(key,false);},zoomBy,reset,resize:requestDraw,
-      destroy(){disposed=true;tourCamera.destroy();cancelPendingMove();rackView.clear();cancelTravel();clearTimeout(delayed);intersection?.disconnect();media.removeEventListener?.('change',motionChanged);document.removeEventListener('visibilitychange',visibilityChanged);if(observer)observer.disconnect();else window.removeEventListener('resize',requestDraw);cancelAnimationFrame(scheduled);renderer.dispose();zoneDock.remove();wrapper.remove();}};
+      destroy(){disposed=true;tourCamera.destroy();cancelPendingMove();rackView.clear();cancelTravel();clearTimeout(delayed);intersection?.disconnect();media.removeEventListener?.('change',motionChanged);document.removeEventListener('visibilitychange',visibilityChanged);if(observer)observer.disconnect();else window.removeEventListener('resize',requestDraw);cancelAnimationFrame(scheduled);renderer.dispose();zoneDock.remove();emergencyNote.remove();wrapper.remove();}};
   }
-  window.GridCampus=Object.freeze({mount,coolingUnitCount});
+  window.GridCampus=Object.freeze({mount,coolingUnitCount,yardUnitCount});
 })();

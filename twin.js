@@ -10,8 +10,8 @@
     if (className) node.className = className;
     return node;
   };
-  function mount({onLoad,onInspect,onPlan,onMix,onPreload}) {
-    let project, metrics, campus, territory, locationKey, request, nearData;
+  function mount({onLoad,onInspect,onPlan,onMix,onPreload,onGridPlan,onSetLocation}) {
+    let project, metrics, campus, territory, gridEditor, locationKey, request, nearData;
     let playing = !matchMedia('(prefers-reduced-motion: reduce)').matches;
     let mode = 'campus', selected = null, station = null, active = false;
     const modeButtons = [...document.querySelectorAll('[data-twin-mode]')];
@@ -27,21 +27,26 @@
     const visual=document.querySelector('.tw-visual');
     const coolingPicker=$('cooling-picker'),unitSelect=$('cooling-start-unit'),coolingInspect=$('cooling-inspect');
     let tourConfig='',tourKind='power',tourOrigin=1,tourBranch={};
-    const geometryConfig=p=>JSON.stringify([p.id,p.config.architecture,p.config.cooling,p.config.it,p.config.pue,p.config.density,p.spacePlan,p.rackStudy,p.rackMix]);
+    let gpuTarget=null,gpuConfig='';
+    const gpuPanel=$('gpu-trace'),gpuPower=$('gpu-power'),gpuCooling=$('gpu-cooling');
+    const reverseTour=()=>tourKind==='gpu-power'||tourKind==='gpu-cooling';
+    const geometryConfig=p=>JSON.stringify([p.id,p.config.architecture,p.config.cooling,p.config.it,p.config.pue,p.config.density,p.spacePlan,p.rackStudy,p.rackMix,p.gridConnection?.station]);
     const tour=GridPowerTour.mount($('power-tour'),{
       onPrepare:()=>{
         tourConfig=geometryConfig(project);
         if(observing)clearObservation(false);
+        if(reverseTour())return campus?.prepareGpuTrace(gpuTarget,tourKind==='gpu-power'?'power':'cooling')||[];
         if(mode!=='campus')changeMode('campus');
         if(tourKind==='cooling')return campus?.prepareCoolingTour({coolingUnit:tourOrigin,...tourBranch})||[];
         return campus?.preparePowerTour(tourBranch)||[];
       },
       onTravel:request=>{
         if(observing)clearObservation(false);
+        if(!reverseTour()&&gpuTarget)forgetGpu();
         const room=request.step.scope!=='yard';
         if(mode!==(room?'cutaway':'campus'))changeMode(room?'cutaway':'campus');
         visual.classList.add('tw-following');
-        $('scene-source').textContent=tourKind==='cooling'?'点设备可暂停细看，继续巡视会回到原来的管段':'亮线沿本方案建模导体行进，设备内部的虚线表示能量变换';
+        $('scene-source').textContent=reverseTour()?'点设备可暂停细看，点另一条路线可从原来的 GPU 重新出发':tourKind==='cooling'?'点设备可暂停细看，继续巡视会回到原来的管段':'亮线沿本方案建模导体行进，设备内部的虚线表示能量变换';
         return campus.followPowerTour(request);
       },
       onHalt:({reason})=>{
@@ -56,6 +61,11 @@
           if(!observing&&mode!=='territory')$('scene-source').textContent=campusNote;
         }
       },
+      onChange:s=>{
+        if(!gpuTarget)return;
+        gpuPower.setAttribute('aria-pressed',String(s.active&&tourKind==='gpu-power'));
+        gpuCooling.setAttribute('aria-pressed',String(s.active&&tourKind==='gpu-cooling'));
+      },
       onInspect:inspectTourStop
     });
     function stopForInspection(){
@@ -66,13 +76,16 @@
       stopForInspection();
       if(step.scope==='rack'||(step.medium==='supply'&&step.key==='rack')){
         if(mode!=='cutaway')changeMode('cutaway');
-        campus?.inspectTourLoad(step);
+        if(campus?.inspectTourLoad(step)&&step.key==='gpu'&&!reverseTour()&&rackState){
+          const {hallIndex,rackIndex,serverNumber,gpuNumber,slotId}=rackState;
+          showGpu({hallIndex,rackIndex,serverNumber,gpuNumber,slot:slotId||undefined});
+        }
       }else if(step.key==='hall-entry'){
         changeMode('cutaway');selectCampus('it');
       }else observe(step.key);
     }
     function userInteracted(event){
-      if(event.target.closest('#tw-power-tour,#tw-tour-open,#tw-cooling-tour-open,#tw-device-cooling-tour,#tw-cooling-picker,.tw-tour-pin,#tw-expand'))return;
+      if(event.target.closest('#tw-power-tour,#tw-tour-open,#tw-cooling-tour-open,#tw-device-cooling-tour,#tw-cooling-picker,#tw-gpu-trace,#tw-gpu-open,.tw-tour-pin,#tw-expand'))return;
       // A canvas pick runs on pointerup. The subsequent compatibility click
       // belongs to that same gesture and must not pause a newly started tour.
       if(event.type==='click'&&event.detail>0)return;
@@ -83,7 +96,73 @@
     function endChoosing(){
       coolingPicker.hidden=true;$('cooling-tour-open').setAttribute('aria-expanded','false');
     }
+    function forgetGpu(){
+      gpuTarget=null;gpuConfig='';gpuPanel.hidden=true;delete gpuPanel.dataset.gpu;
+      visual.classList.remove('tw-gpu-selected');
+      campus?.clearGpuTrace?.();
+    }
+    function rememberGpu(target){
+      if(!target?.gpuId)return false;
+      const previous=gpuTarget;
+      const {yardUnit,coolingUnit}=configForDevice();
+      const next={yardUnit,coolingUnit,...target};
+      if(previous&&reverseTour()&&tour.getState().active&&
+          ['gpuId','slot','yardUnit','coolingUnit'].some(key=>previous[key]!==next[key]))tour.close();
+      gpuTarget=next;gpuConfig=geometryConfig(project);
+      campus?.setGpuContext?.(gpuTarget);
+      gpuPanel.hidden=false;gpuPanel.dataset.gpu=target.gpuId;
+      gpuPanel.querySelector('code').textContent=target.gpuId;
+      const server=target.gpuId.split('-').at(-2),chip=target.gpuId.split('-').at(-1);
+      gpuPanel.querySelector('h3').textContent=(server.startsWith('S')?'服务器 ':'计算托盘 ')+server.slice(1)+' · GPU '+chip.slice(1);
+      $('gpu-hint').textContent=target.hasCooling?'点金色供电线追到变电站，点蓝绿色冷板沿回液管追到冷却机组。':'当前方案没有为这颗 GPU 建模冷板回液支路，可以沿供电线查看上游设备。';
+      gpuPower.disabled=false;gpuCooling.disabled=!target.hasCooling;
+      $('gpu-return').hidden=false;$('gpu-default').hidden=true;
+      const active=tour.getState().active;
+      gpuPower.setAttribute('aria-pressed',String(active&&tourKind==='gpu-power'));
+      gpuCooling.setAttribute('aria-pressed',String(active&&tourKind==='gpu-cooling'));
+      visual.classList.add('tw-gpu-selected');
+      return true;
+    }
+    function showGpu(target){
+      if(reverseTour()&&tour.getState().active)tour.close();
+      else stopForInspection();
+      endChoosing();
+      if(observing)clearObservation(false);
+      changeMode('cutaway');
+      const {yardUnit,coolingUnit}=configForDevice();
+      const selection=campus?.openGpuTrace({yardUnit,coolingUnit,...target});
+      if(rememberGpu(selection))return true;
+      forgetGpu();
+      gpuPanel.hidden=false;gpuPanel.dataset.gpu='';
+      gpuPanel.querySelector('h3').textContent='当前方案未找到这颗 GPU 或所选支路';
+      gpuPanel.querySelector('code').textContent=target?.gpuId||'';
+      $('gpu-hint').textContent='可以查看当前方案中的一颗 GPU。';
+      gpuPower.disabled=true;gpuCooling.disabled=true;
+      $('gpu-return').hidden=true;$('gpu-default').hidden=false;
+      return false;
+    }
+    function startGpuRoute(kind,selection){
+      if(kind!=='power'&&kind!=='cooling')return;
+      if(selection&&(!gpuTarget||gpuTarget.gpuId!==selection.gpuId||gpuTarget.slot!==selection.slot))rememberGpu(selection);
+      if(!gpuTarget||(kind==='cooling'&&!gpuTarget.hasCooling))return;
+      if(tour.getState().active)tour.close();
+      endChoosing();tourKind='gpu-'+kind;
+      tour.setNarrative(tourKind,gpuTarget.gpuId);
+      return tour.start({speakIfAvailable:true});
+    }
+    $('gpu-open').onclick=()=>showGpu(gpuTarget);
+    gpuPower.onclick=()=>startGpuRoute('power');gpuCooling.onclick=()=>startGpuRoute('cooling');
+    $('gpu-return').onclick=()=>{
+      if(reverseTour()&&tour.getState().active)tour.close();
+      if(gpuTarget)showGpu(gpuTarget);
+    };
+    $('gpu-default').onclick=()=>showGpu();
+    $('gpu-close').onclick=()=>{
+      if(reverseTour()&&tour.getState().active)tour.close();
+      forgetGpu();
+    };
     function chooseCoolingOrigin(hint){
+      if(!gpuPanel.hidden)forgetGpu();
       if(tour.getState().active)tour.close();
       if(observing)clearObservation();
       changeMode('campus');
@@ -95,6 +174,7 @@
       coolingPicker.hidden=false;$('cooling-tour-open').setAttribute('aria-expanded','true');
     }
     function startTour(kind,unit,speakIfAvailable){
+      if(!gpuPanel.hidden)forgetGpu();
       const state=tour.getState();
       if(kind==='cooling'&&(!Number.isInteger(unit)||unit<1||unit>GridCampus.coolingUnitCount(project.config))){
         chooseCoolingOrigin('当前方案没有该编号，请选择一台已建模的室外机组');
@@ -119,16 +199,27 @@
     $('cooling-pick-cancel').onclick=()=>{endChoosing();$('cooling-tour-open').focus({preventScroll:true});};
     unitSelect.onchange=()=>{if(unitSelect.value)startTour('cooling',Number(unitSelect.value),true);};
     function showLayout(on){
-      layoutActive=on;$('layout').setAttribute('aria-pressed',String(on));
+      layoutActive=on;
+      const review=$('layout-review');review.hidden=!on;
+      if(on&&campus){
+        const r=campus.getLayoutReview(),spec=project.gridConnection?.station;
+        review.querySelector('[data-layout-counts]').textContent='规划 '+number(r.halls,0)+' 间、'+number(r.racks,0)+' 柜。图中展开 '+r.shown+' 间、'+r.shownRacks+' 个代表柜，标出环路、服务路和出入口。';
+        review.querySelector('[data-layout-emergency]').textContent=r.emergency.note;
+        const yard=spec?spec.highKV+'/'+spec.lowKV+' kV，规划 '+spec.units+' 台 × '+spec.unitMVA+' MVA':'展示 '+r.mainUnits+' 台代表主变';
+        review.querySelector('[data-layout-systems]').textContent='自建站'+(spec?'规格为':'')+yard+'，图内机房对应 '+r.hallFeeders+' 条园区馈线。'+(r.liquidRacks?r.liquidRacks+' 个液冷代表柜接入对应机房的 CDU。':'本图按风冷末端展示散热。');
+      }
+      $('layout').setAttribute('aria-pressed',String(on));
       modeButtons.find(b=>b.dataset.twinMode==='campus').setAttribute('aria-pressed',String(!on&&mode==='campus'));
       if(on)$('scene-source').textContent='点机房编号可进入剖视，室外机组台数为示意';
       else if(mode==='campus')$('scene-source').textContent=campusNote;
     }
     function openLayout(){
+      if(!gpuPanel.hidden)forgetGpu();
       if(tour.getState().active)tour.close();
       if(observing)clearObservation();
       changeMode('campus');selectCampus(null);campus?.setLayoutView(true);
     }
+    $('layout-emergency').onclick=()=>campus?.showEmergency();
     $('layout').onclick=()=>layoutActive?campus?.setLayoutView(false):openLayout();
     const overlay=GridDeviceOverlay.mount($('device-ink'),key=>observe(key),showCoolingParts);
     const panel=GridDeviceLinks.mount($('device-panel'),{
@@ -191,10 +282,10 @@
       }
     }
     function configForDevice(){
-      const units=Math.min(4,Math.max(2,Math.round(2+Math.log2(metrics.facility/80))));
+      const units=GridCampus.yardUnitCount(project,metrics.facility);
       yardUnit=Math.min(yardUnit,units);
       const coolingUnits=GridCampus.coolingUnitCount(project.config);coolingUnit=Math.min(coolingUnit,coolingUnits);
-      return {architecture:project.config.architecture,cooling:project.config.cooling,yardUnits:units,yardUnit,coolingUnits,coolingUnit,
+      return {architecture:project.config.architecture,cooling:project.config.cooling,yardUnits:units,yardSpec:project.gridConnection?.station,yardUnit,coolingUnits,coolingUnit,
         profile:rackState?.rack.profile??GridRackStudy.clean(project.rackStudy).profile};
     }
     function updateProjection(){
@@ -249,7 +340,9 @@
     }
     function syncRack(state){
       const previous=rackState;rackState=state;
-      const cooling=Boolean(state?.cooling),stop=state?.coolingStop;
+      const playback=tour.getState();
+      const inspectedPlate=state?.gpuSelection&&tourKind==='cooling'&&playback.status==='paused'&&playback.step?.key==='gpu'?playback.step:null;
+      const cooling=Boolean(state?.cooling||inspectedPlate),stop=state?.coolingStop||inspectedPlate;
       guideHost.hidden=!state||cooling;visual.classList.toggle('tw-rack-active',Boolean(state));
       guide.update(cooling?null:state);
       coolingInspect.hidden=!cooling||!stop;
@@ -281,7 +374,7 @@
         territory: [project.location.label, '点选区域图中的变电站可查看电压、距场址的直线距离和地图原始记录。']
       };
       const detail = showingStation
-        ? [station.name || '未标注站名的变电站', (station.voltage || '电压未标注') + ' · 距场址 ' + distance(station.distanceKm) + ' · OSM ' + station.id + (station.lifecycle ? ' · ' + station.lifecycle : '')]
+        ? [station.name || '未标注站名的变电站', (station.voltage || '电压未标注') + ' · 距场址 ' + distance(station.distanceKm) + (station.source==='manual'?' · 手动录入':' · OSM '+station.id) + (station.lifecycle ? ' · ' + station.lifecycle : '')]
         : descriptions[mode === 'territory' ? mode : selected || 'campus'];
       const campusFocus = Boolean(selected && mode !== 'territory');
       $('scene-detail').hidden = !campusFocus;
@@ -297,7 +390,7 @@
       $('drill').textContent = selected==='it' && mode==='campus' ? '进入机房剖视 ›' : '查看设备内部 ›';
       $('object-name').textContent = detail[0];
       $('object-description').textContent = detail[1];
-      $('object-kind').textContent = showingStation ? 'OSM 设施' : mode === 'territory' ? '选定场址' : '方案模型';
+      $('object-kind').textContent = showingStation ? (station.source==='manual'?'录入站点':'OSM 设施') : mode === 'territory' ? '选定场址' : '方案模型';
       const link = $('object-link');
       link.hidden = !(showingStation && /^https:\/\/(?:www\.)?openstreetmap\.org\//.test(station.url));
       if (link.hidden) link.removeAttribute('href'); else link.href = station.url;
@@ -310,34 +403,50 @@
       renderDetails();
     }
     function selectStation(row) {
-      station = row || null;
+      station = row ? {...row,distanceKm:GridNearby.distance(project.location.lat,project.location.lon,row.lat,row.lon)} : null;
+      gridEditor?.selectStation(station);
       renderDetails();
       for (const button of $('stations').children) button.setAttribute('aria-pressed', String(button.dataset.id === station?.id));
+    }
+    function updateGrid(){
+      if(mode!=='territory'||!territory)return;
+      const plan=GridConnection.describe(project);
+      const gridPlan={site:{...project.location,name:project.location.label,voltageKV:plan.station.highKV,
+        lowKV:plan.station.lowKV,transformers:plan.station.units,unitMVA:plan.station.unitMVA,configured:plan.configured},
+        connections:plan.links.map(station=>({station,circuits:station.circuits,distanceKm:station.distanceKm,voltageKV:plan.station.highKV}))};
+      territory.update({project,metrics,stations:nearData,gridPlan});
+      gridEditor.update({project,metrics,stations:nearData});
     }
     function renderScene() {
       const regional = mode === 'territory';
       $('territory').hidden = !regional;
+      $('grid-connection').hidden=!regional;
+      visual.classList.toggle('tw-regional',regional);
+      visual.querySelector('.tw-drag-hint').lastChild.textContent=regional?'拖动平移 · 滚轮缩放':'拖动旋转 · 滚轮缩放';
       $('campus').hidden = regional;
       modeButtons.forEach(btn => btn.setAttribute('aria-pressed', String(mode === btn.dataset.twinMode)));
       if (regional) {
         campus?.destroy();
         campus = null;
         const entering = !territory;
-        if (entering) territory = GridTerritory.mount($('territory'), {onSelect: selectStation});
-        territory.update({project, metrics, stations: nearData});
+        if(entering)territory=GridTerritory.mount($('territory'),{onSelect:selectStation,onSelectSite:()=>selectStation(null),onPickLocation:onSetLocation});
+        if(!gridEditor)gridEditor=GridConnection.mount($('grid-connection'),{onChange:onGridPlan,onSetLocation,
+          onPickSite:()=>{territory.pickSite();$('territory').scrollIntoView({block:'nearest'});},
+          onFocus:row=>{selectStation(row);if(row)territory.focusStation(row);else territory.reset();}});
+        updateGrid();
         territory.setPlaying?.(playing);
         if (entering && station) territory.focusStation(station);
       } else {
         territory?.destroy();
         territory = null;
-        if (!campus) campus = GridCampus.mount($('campus'), {onRackChange:syncRack,onProjectionChange:updateProjection,onTourInspect:inspectTourStop,onLayoutChange:showLayout,onHallChange:()=>clearObservation(false),onSelect:selectCampus,onInspect:inspectTarget,onOpenHall:()=>{selectCampus('it');changeMode('cutaway');}});
+        if (!campus) campus = GridCampus.mount($('campus'), {onRackChange:syncRack,onGpuPick:rememberGpu,onGpuRoute:startGpuRoute,onProjectionChange:updateProjection,onTourInspect:inspectTourStop,onLayoutChange:showLayout,onHallChange:()=>clearObservation(false),onSelect:selectCampus,onInspect:inspectTarget,onOpenHall:()=>{selectCampus('it');changeMode('cutaway');}});
         campus.update({project, metrics});
         campus.setPlaying?.(playing);
         campus.setMode(mode);
         campus.setCircuit?.(planner.getCircuit());
         campus.setSelected(selected);
       }
-      if(!observing)$('scene-source').textContent = {campus:campusNote, cutaway:'机柜为代表性示意，规划数量按方案折算', territory:'设施位置来自 OSM，距离按场址至站点代表点计算'}[mode];
+      if(!observing)$('scene-source').textContent = {campus:campusNote, cutaway:'机柜为代表性示意，规划数量按方案折算', territory:'规划距离按场址与站点代表坐标计算，实际线路长度以勘测为准'}[mode];
       planner.renderRoutes(mode);
       if(layoutActive)showLayout(true);
       renderDetails();
@@ -346,7 +455,10 @@
       if (mode !== nextMode) {
         if(nextMode!=='campus')endChoosing();
         if(layoutActive)campus?.setLayoutView(false);
-        if(nextMode==='territory'&&tour.getState().active)tour.close();
+        if(nextMode==='territory'){
+          if(tour.getState().active)tour.close();
+          if(!gpuPanel.hidden)forgetGpu();
+        }
         if(observing&&!keepObservation)clearObservation();
         mode = nextMode;
         if(mode==='cutaway')onPreload?.();
@@ -397,11 +509,11 @@
       nearData = null;
       selectStation(null);
       renderStations();
-      territory?.update({project, metrics, stations:null});
+      updateGrid();
       GridNearby.find(lat,lon,{radiusKm:15,limit:1000,signal:controller.signal}).then(data => {
-        if (active && !controller.signal.aborted) { nearData = data; renderStations(); territory?.update({project, metrics, stations: data}); }
+        if (active && !controller.signal.aborted) { nearData = data; renderStations(); updateGrid(); }
       }).catch(() => {
-        if (active && !controller.signal.aborted) { nearData = {status:'unavailable',rows:[]}; renderStations(); territory?.update({project, metrics, stations:nearData}); }
+        if (active && !controller.signal.aborted) { nearData = {status:'unavailable',rows:[]}; renderStations(); updateGrid(); }
       }).finally(() => { if (request === controller) request = null; });
     }
     const expanded = () => document.fullscreenElement === visual || visual.classList.contains('tw-expanded');
@@ -457,9 +569,17 @@
     });
     let beforeInspection;
     return {
-      observe,openLayout,startPowerTour:()=>startTour('power',null,false),
+      observe,openLayout,showGpu,openGrid:()=>changeMode('territory'),startPowerTour:()=>startTour('power',null,false),
       startCoolingTour:unit=>unit===null?chooseCoolingOrigin():startTour('cooling',unit,false),
       getShareHash(){
+        if(mode==='territory')return '#twin/grid';
+        if(gpuTarget){
+          const params=new URLSearchParams();
+          for(const [param,value] of [['slot',gpuTarget.slot],['plant',gpuTarget.coolingUnit],['yard',gpuTarget.yardUnit]]){
+            if(Number.isSafeInteger(value)&&value>1)params.set(param,String(value));
+          }
+          return '#twin/gpu-trace/'+gpuTarget.gpuId+(params.size?'?'+params:'');
+        }
         if(tour.getState().active&&tourKind==='cooling')return '#twin/cooling-tour/'+tourOrigin;
         if(!coolingPicker.hidden)return '#twin/cooling-tour';
         return observing?'#twin/device/'+observing.key:tour.getState().active?'#twin/tour':layoutActive?'#twin/layout':rackState?'#twin/rack':'#twin';
@@ -483,6 +603,7 @@
       update(nextProject) {
         active = true;
         if(tour.getState().active&&tourConfig!==geometryConfig(nextProject))tour.close();
+        if(!gpuPanel.hidden&&gpuConfig!==geometryConfig(nextProject))forgetGpu();
         const projectChanged = project?.id !== nextProject.id;
         project = nextProject;
         if(!coolingPicker.hidden)chooseCoolingOrigin();
@@ -508,7 +629,7 @@
       },
       pause() {
         endChoosing();
-        tour.close();
+        tour.close();if(!gpuPanel.hidden)forgetGpu();
         if(layoutActive)campus?.setLayoutView(false);
         clearObservation(false);guide.pause?.();active = false; beforeInspection=null;
         if (expanded()) exitExpanded();

@@ -26,7 +26,43 @@
     const ring=node('circle','tw-tour-glow'),dot=node('circle','tw-tour-charge');ring.setAttribute('r','7.5');dot.setAttribute('r','3.8');
     const label=document.createElement('button');label.type='button';label.className='tw-tour-pin';label.hidden=true;
     label.onclick=e=>{e.stopPropagation();if(scene)onInspect(scene.step);};
-    host.append(svg,label);svg.style.display='none';
+    const network=document.createElementNS(svgNS,'svg');network.classList.add('tw-gpu-network');
+    network.setAttribute('aria-hidden','true');network.style.display='none';
+    const networkPaths=['power','cooling'].map(kind=>['conductor','transfer'].map(type=>{
+      const path=document.createElementNS(svgNS,'path');
+      path.dataset.route=kind;path.dataset.segment=type;network.append(path);return path;
+    }));
+    let context=null,lastView='';
+    function setGpuContext(routes,height=1){
+      const groups=routes&&[routes.power,routes.cooling].map(plan=>{
+        const sections=plan?.stops.flatMap(step=>step.segments)||[];
+        return [sections.filter(s=>s.kind!=='transfer'),sections.filter(s=>s.kind==='transfer')];
+      });
+      context=groups&&{groups,height};lastView='';
+      if(!context){
+        network.style.display='none';delete network.dataset.gpu;
+        for(const pair of networkPaths)for(const path of pair)path.removeAttribute('d');
+      }
+      else network.dataset.gpu=routes.gpuId;
+    }
+    function drawContext(cam,project){
+      if(!context)return;
+      // At board scale the selectable solids carry the colors. At room scale reveal the whole network.
+      const ratio=cam.scale*context.height/Math.min(cam.width,cam.height);
+      const opacity=clamp((.70-ratio)/.28,0,1);
+      if(!opacity){network.style.display='none';lastView='';return;}
+      const view=[cam.width,cam.height,cam.scale,cam.cx,cam.cy,cam.ca,cam.sa,cam.sp,cam.cp].join('/');
+      if(lastView===view)return;
+      lastView=view;network.style.display='';network.style.opacity=String(opacity);
+      context.groups.forEach((pair,i)=>pair.forEach((sections,j)=>{
+        const d=sections.map(section=>section.points.map((p,k)=>{
+          const [x,y]=project(p,cam);
+          return (k?'L':'M')+x.toFixed(1)+' '+y.toFixed(1);
+        }).join(' ')).join(' ');
+        networkPaths[i][j].setAttribute('d',d);
+      }));
+    }
+    host.append(network,svg,label);svg.style.display='none';
     let motion=null,scene=null;
     function settle(result){
       if(!motion)return;
@@ -69,6 +105,7 @@
       return current;
     }
     function draw(cam,project){
+      drawContext(cam,project);
       if(!scene)return;
       const pixels=scene.path.points.map(p=>project(p,cam)),head=scene.path.sample(scene.at),end=pixels.at(-1),p=project(head.point,cam);
       const xy=v=>v[0].toFixed(1)+','+v[1].toFixed(1);
@@ -92,7 +129,7 @@
         label.style.left=clamp(end[0],half,cam.width-half-space)+'px';label.style.top=clamp(end[1]-23,17,cam.height-17)+'px';
       }
     }
-    return {play,tick,draw,halt,get medium(){return scene?.step.medium;},get moving(){return Boolean(motion);},destroy(){halt(true);svg.remove();label.remove();}};
+    return {play,tick,draw,halt,setGpuContext,get medium(){return scene?.step.medium;},get moving(){return Boolean(motion);},destroy(){halt(true);network.remove();svg.remove();label.remove();}};
   }
   window.GridPowerCamera={mount,measure};
 })();

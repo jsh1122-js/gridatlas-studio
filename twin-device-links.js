@@ -35,7 +35,7 @@
   };
   const transformerKey=n=>n===1?'sub-transformer':'sub-transformer-'+n;
   const transformerNumber=k=>k==='sub-transformer'?1:/^sub-transformer-[2-4]$/.test(k)?Number(k.slice(-1)):0;
-  const installedUnits=options=>Math.min(4,Math.max(2,Math.trunc(Number(options?.yardUnits))||2));
+  const installedUnits=options=>Math.min(4,Math.max(1,Math.trunc(Number(options?.yardUnits))||2));
   const installedCooling=options=>Math.min(14,Math.max(2,Math.trunc(Number(options?.coolingUnits))||10));
   const coolingKey=n=>'cooling-unit-'+n;
   const coolingNumber=k=>/^cooling-unit-[1-9]\d*$/.test(k)?Number(k.slice(13)):0;
@@ -158,6 +158,11 @@
     if(key==='psu'&&dc)summary='机架侧 DC/DC 模块将设施侧直流输入降为柜内低压直流。模块与服务器须满足所选输入电压和接口要求。';
     if(key.startsWith('sub-'))context='园区变电站示意';
     if(outdoorNumber)context='室外冷却区 · '+coolingUnits+' 台设备';
+    const spec=options.yardSpec;
+    if(spec&&key.startsWith('sub-')){
+      summary+=' 本方案自建站 '+spec.highKV+'/'+spec.lowKV+' kV，'+spec.units+' 台 × '+spec.unitMVA+' MVA。';
+      if(spec.units>yardUnits)summary+='园区场景展开 '+yardUnits+' 台代表主变。';
+    }
     if(['sub-incoming','sub-switchgear'].includes(key))summary+='本次追踪 '+yardUnit+' 号主变的示意支路。';
     if(key==='rack'&&cooling==='风冷'&&profile!=='pcie')context='风冷机房方案 · NVL72 样机的冷板另需液冷接口';
     const circuit=outdoorNumber||key==='liquid'?'liquid':['air','fan'].includes(key)?'air':key==='network'?'data':'power';

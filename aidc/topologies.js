@@ -17,7 +17,7 @@
     const n=count(rows);return defaultLabel+' '+fmt(n,0);
   }
   function normalize(items,devices,data){
-    return items.map(line=>({device:devices.get(line.dev),count:Number(line.count??1),zone:line.zone||''})).filter(x=>x.device&&Number.isFinite(x.count)&&x.count>0).map(x=>({...x,zone:x.zone||data.layout.role_zone[x.device.role]||'elsewhere'}));
+    return items.map(line=>({device:devices.get(line.dev),count:Number(line.count??1),zone:line.zone||''})).filter(x=>x.device&&Number.isFinite(x.count)&&x.count>0).map(x=>({...x,zone:x.zone||GridAidcLayoutReview.defaultZone(x.device,data.layout)||'elsewhere'}));
   }
   function layout(view,scene,rows,selectedModel){
     const racks=role(rows,'it_rack'), network=role(rows,'network'),storage=role(rows,'storage');
@@ -30,23 +30,35 @@
     }
     if(view==='power'){
       const arch=scene.arch||'ac_ups';
-      const nodes=[
-        block('grid','市电与开关',has('grid'),'amber'),
-        block('xfm',arch==='sst'?'固态变压器':'变压器',arch==='sst'?has('sst'):has('transformer'),'amber'),
-        block('conv',arch==='ac_ups'?'UPS 变换':arch==='hvdc'?'直流整流':'直流侧设备',arch==='ac_ups'?has('ups'):has('hvdc'),'amber'),
-        block('dist','末端配电',has('dist','pdu'),'amber'),block('load','算力设备',racks,'blue')
-      ];
-      const supplyRoles=arch==='ac_ups'?['hvdc','sst']:arch==='hvdc'?['ups','sst']:['ups','transformer'];
-      const branches=[block('backup','备用发电与电池',has('gen','battery','ess'),'slate','备电支路')];
-      const extra=has(...supplyRoles);if(extra.length)branches.push(block('other','其他变换设备',extra,'slate','清单另列'));
-      return {type:'flow',heading:(archNames[arch]||arch)+'供电路径',guide:'主线表示所选架构的功能顺序，支路列出清单中对应的备电与其他设备。',nodes,branches};
+      const tru=r=>/\bTRU\b|变压器整流单元/i.test(r.device.model+' '+r.device.name);
+      const transformer=has('transformer'),dc=has('hvdc'),solid=has('sst');
+      const nodes=[block('grid','市电与开关',has('grid'),'amber')];
+      if(arch==='ac_ups'||arch==='hvdc'&&transformer.length)nodes.push(block('xfm','独立配电变压器',transformer,'amber'));
+      const converters=arch==='ac_ups'?has('ups'):arch==='hvdc'?[...dc,...solid.filter(tru)]:solid.filter(r=>!tru(r));
+      nodes.push(block('conv',arch==='ac_ups'?'UPS 变换':arch==='hvdc'?'直流整流 / TRU':'SST 变换',converters,'amber'),
+        block('dist','末端配电',has('dist','pdu'),'amber'),block('load','计算、网络与存储',[...racks,...network,...storage],'blue'));
+      const branches=[block('generator','备用发电',has('gen'),'amber','经切换或并机设备接应急配电'),
+        block('battery','电池后备',has('battery'),'slate','按变换设备的直流接口核对'),
+        block('ess','储能系统',has('ess'),'teal','接入点与控制策略另行核对'),
+        block('aux','冷却辅机供电',has('pump','chiller','crah','ahu','cdu','drycooler','cooling_tower').filter(r=>r.device.id!=='hex-plate-3000'),'teal','应急供电范围以负荷清单为准')];
+      const extra=has('ups','hvdc','sst','transformer').filter(r=>!nodes.some(n=>n.rows.includes(r)));
+      if(extra.length)branches.push(block('other','其他变换设备',extra,'slate','清单另列'));
+      return {type:'flow',heading:(archNames[arch]||arch)+'供电路径',guide:'主线按供电架构排列。发电机经切换或并机进入应急配电，电池接入相应电源的直流侧。储能系统的接入点以方案单线图为准。',nodes,branches};
     }
     if(view==='cooling'){
       const liquid=String(scene.cooling).startsWith('liquid'),immersion=scene.cooling==='immersion';
-      const source=has('chiller'),outs=has('cooling_tower','drycooler');
-      const nodes=[block('heat','IT 热源',racks,'blue'),block('terminal',liquid?'冷板与 CDU':immersion?'浸没槽与换热':'机房空气换热',liquid?has('cdu'):immersion?has('immersion'):has('crah','ahu'),'teal'),block('loop','流体输送',has('pump'),'teal'),block('source','冷源设备',source,'teal'),block('out','室外排热',outs,'teal')];
+      const source=has('chiller'),outs=rows.filter(r=>['drycooler','cooling_tower'].includes(r.device.role)||r.zone==='roof'&&r.device.shape==='drycooler');
+      const exchangers=has('pump').filter(r=>/板式换热|板换/.test(r.device.name)),pumps=has('pump').filter(r=>!exchangers.includes(r));
+      const nodes=[block('heat','IT 热源',racks,'blue'),
+        block('terminal',liquid?'冷板与 CDU':immersion?'浸没槽与换热':'机房空气换热',liquid?has('cdu'):immersion?has('immersion'):has('crah','ahu'),'teal'),
+        block('loop','循环泵',pumps,'teal')];
+      if(source.length)nodes.push(block('source','压缩式冷源',source,'teal'));
+      nodes.push(block('out','室外与屋面排热',outs,'teal'));
       const other=liquid?has('ahu','crah','immersion'):immersion?has('ahu','crah','cdu'):has('cdu','immersion');
-      return {type:'flow',heading:coolingNames[scene.cooling]||scene.cooling||'制冷循环',guide:'沿散热方向浏览各环节。实际水路、旁通和供回水关系需结合设计图。',nodes,branches:other.length?[block('extracool','并列热管理设备',other,'slate','清单另列')]:[]};
+      const branches=[];
+      if(exchangers.length)branches.push(block('hex','独立换热设备',exchangers,'teal','两侧流体分别循环'));
+      if(other.length)branches.push(block('extracool','并列热管理设备',other,'slate','清单另列'));
+      return {type:'flow',heading:coolingNames[scene.cooling]||scene.cooling||'制冷循环',guide:liquid?'图中按散热功能排列。机柜二次侧经回液管回 CDU；一次侧独立循环，将热量送到室外。压缩制冷与自然冷源的运行组合需核对水系统图。':'图中按散热功能排列。泵组、换热设备和室外排热设备各自列出，具体供回水与旁通关系需核对水系统图。',nodes,branches};
     }
     if(view==='rack'){
       return {type:'system',heading:'算力、网络与存储',guide:'以交换设备为互联节点。图中展示已选型号及数量，现场端口和实际连线需另行确认。',nodes:[block('compute','计算设备',racks,'blue'),block('network','交换网络',network,'violet'),block('storage','存储设备',storage,'teal')],branches:[block('pdu','机柜配电',has('pdu'),'amber'),block('mgmt','管控平台',has('mgmt'),'slate')]};
@@ -89,7 +101,7 @@
         const b=el('button','','gt-node '+node.tone);b.type='button';b.dataset.group=node.id;b.setAttribute('aria-pressed',String(state.node===node.id));b.classList.toggle('gt-none',!node.rows.length);
         b.append(el('strong',node.title));
         if(state.view==='super'&&['fabric','chips'].includes(node.id))b.append(el('span',node.caption));
-        else b.append(el('span',groupLine(node.rows)));
+        else {b.append(el('span',groupLine(node.rows)));if((v.branches||[]).includes(node)&&node.caption)b.append(el('small',node.caption));}
         b.onclick=()=>{state.node=node.id;redraw();};return b;
       }
       const grid=el('div','','gt-'+v.type);grid.style.setProperty('--stages',v.nodes.length);
@@ -100,6 +112,7 @@
       if(state.view==='facility') {
         const dims=scene.layout?.building||{},dim=[dims.w,dims.d,dims.h].every(Number.isFinite)?[dims.w,dims.d,dims.h].join(' × ')+' m':'未给出';
         appendMetrics(panel,[['场景建筑长 × 深 × 高',dim],['清单数量',fmt(count(rows),0)+' 台 / 套'],['算力设备额定功率',fmt(capacity,3)+' MW']]);
+        GridAidcLayoutReview.render(panel,scene,rows,data.layout);
       }else if(state.view==='rack')appendMetrics(panel,[['计算设备',fmt(count(racks),0)+' 台 / 套'],['已记录加速芯片数',fmt(known,0)+' 颗'],['交换设备',fmt(count(role(rows,'network')),0)+' 台']]);
       else if(state.view==='super'&&v.d){
         const hasGpu=Number.isFinite(v.d.compute?.gpus),units=count(v.current),pcap=Number(v.d.cap_kw);
@@ -117,5 +130,5 @@
     };
     redraw();
   }
-  window.GridAidcTopology={render};
+  window.GridAidcTopology={render,resetView:root=>prefs.delete(root)};
 })();

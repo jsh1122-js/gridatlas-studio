@@ -1,0 +1,27 @@
+#tw-gpu-open,#tw-gpu-trace button{border:1px solid #48636e;border-radius:5px;background:#182d38;color:#d9eaf0;font:inherit;cursor:pointer}
+#tw-gpu-open{font-size:.79rem;line-height:1.3;font-weight:650;padding:5px 9px;white-space:nowrap}
+#tw-gpu-open:hover,#tw-gpu-trace button:hover:enabled{background:#263f4a}
+#tw-gpu-trace{padding:10px 14px;background:#11242e;color:#e7f0f2;border:1px solid #364f5c;border-radius:6px;min-width:0}
+#tw-gpu-trace[hidden],#tw-gpu-trace [hidden],.tw-gpu-selected #tw-rack-guide,.tw-gpu-selected:not(.tw-observing) #tw-device-panel{display:none}
+.tgt-origin,.tgt-actions{display:flex;flex-wrap:wrap;align-items:center;gap:5px 10px}
+.tgt-origin h3{margin:0;font-size:.95rem;line-height:1.4}
+.tgt-origin code{color:#b7c9d1;font-size:.79rem;overflow-wrap:anywhere}
+#tw-gpu-close{margin-left:auto;font-size:.78rem;padding:3px 7px}
+#tw-gpu-hint{margin:5px 0 7px;font-size:.86rem;line-height:1.45;color:#c4d3da}
+#tw-gpu-trace .tgt-actions button{min-height:30px;padding:3px 10px;font-size:.84rem;font-weight:600}
+#tw-gpu-trace .tgt-actions button:disabled{opacity:.44;cursor:default}
+#tw-gpu-power,#tw-gpu-cooling{display:inline-flex;align-items:center;gap:6px}
+#tw-gpu-power{--gpu-route-color:#f6c16d}
+#tw-gpu-cooling{--gpu-route-color:#6fe0d5}
+#tw-gpu-power:before,#tw-gpu-cooling:before{content:"";display:inline-block;width:15px;border-top:3px solid var(--gpu-route-color);border-radius:2px}
+#tw-gpu-trace [aria-pressed=true]{border-color:var(--gpu-route-color);color:var(--gpu-route-color)}
+#tw-gpu-open:focus-visible,#tw-gpu-trace button:focus-visible{outline:2px solid #a2dfdf;outline-offset:2px}
+#tw-campus .rack-scene-pin[data-rack-kind=gpu-power]{color:#ffdb9b;border-color:#eabe75;background:#3a3022}
+#tw-campus .rack-scene-pin[data-rack-kind=gpu-cooling]{color:#b4f6ee;border-color:#69cbbc;background:#153e40}
+#tw-power-tour[data-kind=gpu-cooling]{--tpt-tone:#79dbcf}
+#tw-power-tour[data-kind=gpu-cooling] .tpt-panel{border-top-color:var(--tpt-tone)}
+#tw-power-tour[data-kind=gpu-cooling] .tpt-count{color:var(--tpt-tone)}
+#tw-power-tour[data-kind=gpu-cooling] progress::-webkit-progress-value{background:var(--tpt-tone)}
+#tw-power-tour[data-kind=gpu-cooling] progress::-moz-progress-bar{background:var(--tpt-tone)}
+.tw-visual:has(#tw-power-tour[data-kind=gpu-cooling]:not([hidden])) [data-tour-medium=return]{--tour-flow:#70dfd0;--tour-trail:#cbfff4;--tour-pin-bg:#183c40}
+@media(max-width:650px){#tw-gpu-trace{padding:8px 10px}#tw-gpu-trace .tgt-actions button{min-height:36px}.tgt-actions{gap:6px}#tw-gpu-open{font-size:.74rem}}

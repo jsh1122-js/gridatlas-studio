@@ -1,19 +1,21 @@
 (() => {
   'use strict';
-  function mount(host, {getRoom, moveCamera, captureCamera, restoreCamera, redraw, onChange}) {
+  function mount(host, {getRoom, moveCamera, captureCamera, restoreCamera, redraw, onChange, onGpuPick, onGpuTrace}) {
     let rig=null, geometry, trace=null, view='rack', step='rack', slot=null, open=true, extended=false;
     let door=0, extension=0, closing=false, pendingSlot=null, tourAt=0, origin,journey=null,livePlan=null,liveModel=null,coolingStop=null;
+    let gpuSelection=null;
     const tags=document.createElement('div');tags.className='rack-scene-tags';host.append(tags);
     const labelNodes=[];
     function notify(){
-      onChange?.(rig?{rack:rig.topology,slotId:slot,view,step,doorOpen:open,extracted:extended,journey:Boolean(journey),cooling:Boolean(rig.cooling),
+      onChange?.(rig?{rack:rig.topology,hallIndex:rig.hallIndex,rackIndex:rig.rackIndex,slotId:slot,view,step,doorOpen:open,extracted:extended,journey:Boolean(journey),cooling:Boolean(rig.cooling),gpuSelection,gpuId:journey?.gpu.id,
         coolingStop:rig.cooling?coolingStop:null,serverNumber:journey?.server.number,gpuNumber:journey?.gpu.number}:null);
     }
     function setActivity(){
       if(!rig)return;
       rig.boardInspect=Boolean(journey&&(step==='server'||step==='gpu'));
       rig.selectedId=trace?.module.id||null;
-      rig.highlight=rig.cooling?[]:journey?journey.nodes.map(n=>n.id):trace?.pathIds||[];
+      rig.dualGpuId=gpuSelection?.gpuId||null;
+      rig.highlight=gpuSelection?journey.nodes.map(n=>n.id):rig.cooling?[]:journey?journey.nodes.map(n=>n.id):trace?.pathIds||[];
       const what={rowdist:trace?.rowdist,pdu:trace?.pdu,psu:trace?.module,bus:trace?.bus,servers:trace?.servers[0],server:journey?.server,gpu:journey?.gpu};
       rig.highlightStep=rig.cooling?coolingStop?.nodeId:what[step]?.id||null;
       geometry=getRoom().model.getRackRig(rig);
@@ -29,7 +31,9 @@
     function fit(action='rack'){
       if(!geometry)return;
       let pts=cabinetBounds(),angle=geometry.frontYaw+.25,pitch=.25;
-      if(rig.cooling&&coolingStop){
+      if(gpuSelection&&geometry.boardBounds){
+        pts=geometry.boardBounds;pitch=.86;
+      }else if(rig.cooling&&coolingStop){
         const target=geometry.anchors[coolingStop.nodeId];
         const radius=geometry.size[2]*({rack:.45,server:.20,gpu:.073}[step]||.45);
         if(target){
@@ -59,7 +63,11 @@
         b.textContent=text;b.onclick=e=>{e.stopPropagation();act();};
         tags.append(b);labelNodes.push({b,id:n.id});
       }
-      if(rig.cooling&&geometry.cooling){
+      if(gpuSelection){
+        const lead=journey.edgeIds.at(-1),plate=geometry.cooling?.branches[journey.gpu.id]?.plate;
+        tag({id:lead},'供电线','gpu-power',()=>onGpuTrace?.('power',gpuSelection));
+        if(plate)tag(plate,'冷板与回液管','gpu-cooling',()=>onGpuTrace?.('cooling',gpuSelection));
+      }else if(rig.cooling&&geometry.cooling){
         const c=geometry.cooling,click=n=>inspectCoolant(n);
         const fittings=step==='rack'?[c.manifoldS,c.manifoldR]:step==='server'?[c.hoseS,c.hoseR]:[c.branches[journey.gpu.id].plate];
         for(const n of fittings)tag(n,n.label,'coolant',()=>click(n));
@@ -119,6 +127,7 @@
       const info=layout({rackIndex:index});if(!info)return false;
       if(!journey&&rig?.rackIndex===info.index&&rig.hallIndex===info.hallIndex){if(closing){closing=false;open=true;}fit();notify();return true;}
       if(!rig)origin=captureCamera();
+      gpuSelection=null;
       rig=newRig(info);journey=null;livePlan=null;liveModel=null;coolingStop=null;
       trace=null;slot=null;open=true;extended=false;closing=false;door=0;extension=0;pendingSlot=null;view='rack';step='rack';tourAt=0;
       setActivity();fit();refreshTags();notify();redraw();return true;
@@ -156,7 +165,7 @@
     function coolingPlanInfo(options){
       const info=layout(options,false);if(!info)return null;
       const t=info.topology,hall=info.room.model.plan.dims[info.hallIndex];
-      if(t.profile==='pcie'||hall.coolingPaths?.rackIndex!==info.index)return null;
+      if(t.profile==='pcie'||(hall.coolingByRack?.[info.index]||hall.coolingPaths)?.rackIndex!==info.index)return null;
       const server=t.servers.find(n=>n.number===(options.serverNumber??9));
       const gpu=t.gpus.find(n=>n.serverId===server?.id&&n.number===(options.gpuNumber??2));
       if(!server||!gpu)return null;
@@ -177,6 +186,7 @@
         t.id+' 的'+server.label+'中，'+gpu.label+'（'+gpu.id+'）贴合铜质冷板。芯片的热量经接触面传进冷板，流道内的冷却液把热量带走。冷板采用剖面示意。');
       stop(c.hoseR,[...branch.chipReturn,...c.trayReturn.slice(1)],server.label+' · 回液快接',
         '从同一颗 GPU 的冷板流出后，升温的液体沿另一根软管离开板卡，通过托盘回液快接进入机柜回液歧管。');
+      stops.at(-1).segments=[{kind:'pipe',run:'coldplate-return',points:branch.chipReturn},{kind:'pipe',run:'tray-return',points:c.trayReturn}];
       stop(c.manifoldR,c.rackReturn,'机柜 '+t.id+' · 回液歧管',
         '来自托盘的回液在歧管汇集，经机柜回液出口进入机房二次侧回液管。下一段回到 CDU，在换热面把热量交给设施侧。');
       const plan={hallIndex:info.hallIndex,rackIndex:info.index,rackId:t.id,profile:t.profile,
@@ -190,6 +200,7 @@
       const found=coolingPlanInfo(options);if(!found)return null;
       if(!rig)origin=captureCamera();
       const same=rig?.rackIndex===found.plan.rackIndex&&rig.hallIndex===found.plan.hallIndex;
+      gpuSelection=null;
       rig=found.plannedRig;livePlan=found.plan;liveModel=getRoom().model;journey=found.selected;
       trace=null;slot=null;open=true;extended=false;closing=false;pendingSlot=null;tourAt=0;extension=0;
       if(!same)door=0;rig.door=door;view='rack';
@@ -199,6 +210,7 @@
       if(!rig?.cooling||!livePlan)return false;
       const next=livePlan.stops.find(stop=>stop.nodeId===s?.nodeId);
       if(!next)return false;
+      gpuSelection=null;slot=null;trace=null;
       open=true;coolingStop=next;step=next.key;view='rack';tourAt=0;setActivity();refreshTags();notify();redraw();return true;
     }
     function inspectCoolant(n){
@@ -218,6 +230,7 @@
       livePlan=found.plan;liveModel=room.model;
       if(!rig)origin=captureCamera();
       const same=rig?.rackIndex===found.plan.rackIndex&&rig.hallIndex===found.plan.hallIndex;
+      gpuSelection=null;
       rig=found.plannedRig;journey=found.selected;coolingStop=null;slot=journey.module.slot;
       trace=GridRackCircuit.trace(rig.topology,slot);
       open=true;extended=false;closing=false;pendingSlot=null;tourAt=0;extension=0;if(!same)door=0;
@@ -226,22 +239,68 @@
     }
     function setJourneyStep(key){
       if(rig?.cooling||!journey||!['rack','rowdist','pdu','psu','bus','server','gpu'].includes(key))return false;
+      gpuSelection=null;
       step=key;view=key==='rowdist'?'circuit':'rack';tourAt=0;
       setActivity();refreshTags();notify();redraw();return true;
     }
     function inspectBoard(server,gpu,chip=false){
       if(!rig||!server)return false;
+      if(chip&&gpu)return pickGpu({serverNumber:server.number,gpuNumber:gpu.number});
       const module=trace?.module.serverIds.includes(server.id)?trace.module:rig.topology.modules.find(m=>m.serverIds.includes(server.id));
       if(!module)return false;
       const selected=GridRackCircuit.branch(rig.topology,{slot:module.slot,serverNumber:server.number,gpuNumber:gpu?.number??1});
       if(!selected)return false;
       livePlan=null;liveModel=null;coolingStop=null;rig.cooling=false;slot=module.slot;trace=GridRackCircuit.trace(rig.topology,slot);journey=selected;rig.boardServerId=server.id;
       open=true;extended=false;pendingSlot=null;extension=0;rig.extraction=0;
-      const key=chip?'gpu':'server';
-      setJourneyStep(key);fit(key);return true;
+      setJourneyStep('server');fit('server');return true;
+    }
+    function selectGpu(options={}){
+      const info=layout({...options,hallIndex:options.hallIndex??rig?.hallIndex,rackIndex:options.rackIndex??rig?.rackIndex},false);
+      if(!info)return null;
+      const t=info.topology,same=rig?.hallIndex===info.hallIndex&&rig.rackIndex===info.index;
+      const target=t.servers.find(n=>n.number===options.serverNumber);
+      if(!target||!Number.isInteger(options.gpuNumber))return null;
+      const previous=same&&trace?.module;
+      const part=options.slot!=null?t.modules.find(n=>n.slot===options.slot):
+        previous&&previous.serverIds.includes(target.id)?previous:t.modules.find(n=>n.serverIds.includes(target.id));
+      if(!part)return null;
+      const branch=GridRackCircuit.branch(t,{slot:part.slot,serverNumber:target.number,gpuNumber:options.gpuNumber});
+      if(!branch||options.gpuId&&options.gpuId!==branch.gpu.id)return null;
+      if(!rig)origin=captureCamera();
+      if(!same){rig=newRig(info);door=0;}
+      const selected={hallIndex:info.hallIndex,rackIndex:info.index,slot:part.slot,serverNumber:target.number,gpuNumber:branch.gpu.number,gpuId:branch.gpu.id};
+      // Retain the thermal inspection panel when a person enters from a running cooling tour.
+      const thermal=rig.cooling?coolingPlanInfo(selected)?.plan:null;
+      livePlan=thermal||null;liveModel=thermal?info.room.model:null;coolingStop=thermal?.stops.find(s=>s.key==='gpu')||null;
+      rig.cooling=Boolean(thermal);rig.boardServerId=target.id;rig.door=door;rig.extraction=0;
+      trace=GridRackCircuit.trace(t,part.slot);journey=branch;slot=part.slot;
+      open=true;closing=false;extended=false;extension=0;pendingSlot=null;tourAt=0;step='gpu';view='rack';
+      gpuSelection={...selected,hasCooling:false};
+      setActivity();gpuSelection.hasCooling=Boolean(geometry.cooling?.branches[branch.gpu.id]);
+      fit('gpu');refreshTags();notify();redraw();return gpuSelection;
+    }
+    function pickGpu(options){
+      const selection=selectGpu(options);
+      if(selection)onGpuPick?.(selection);
+      return Boolean(selection);
+    }
+    function clearGpuSelection(){
+      if(!gpuSelection)return;
+      gpuSelection=null;setActivity();refreshTags();notify();redraw();
+    }
+    function getGpuPickPoints(){
+      if(!gpuSelection||!geometry)return null;
+      const line=geometry.edgePoints[journey.edgeIds.at(-1)],plate=geometry.cooling?.branches[journey.gpu.id];
+      const sample=(a,b,f)=>a.map((n,i)=>n+(b[i]-n)*f);
+      const power=[];
+      for(const i of [3,2,4,1]){
+        for(const f of [.55,.26,.80])power.push(sample(line[i],line[i+1],f));
+      }
+      const cooling=plate?[geometry.anchors[plate.plate.id],...plate.chipReturn.slice(1,5)]:[];
+      return {gpuId:gpuSelection.gpuId,power,cooling};
     }
     function applySlot(n){
-      journey=null;livePlan=null;liveModel=null;coolingStop=null;rig.cooling=false;rig.boardServerId=null;slot=n;trace=GridRackCircuit.trace(rig.topology,n);step='psu';view='rack';open=true;extended=true;
+      gpuSelection=null;journey=null;livePlan=null;liveModel=null;coolingStop=null;rig.cooling=false;rig.boardServerId=null;slot=n;trace=GridRackCircuit.trace(rig.topology,n);step='psu';view='rack';open=true;extended=true;
       setActivity();fit();refreshTags();notify();redraw();
     }
     function selectSlot(n){
@@ -253,20 +312,21 @@
     function focusStep(key){
       if(!rig||closing)return;
       if(key!=='rack'&&!trace){applySlot(rig.topology.modules[0].slot);}
-      pendingSlot=null;if(key!=='rowdist')open=true;
+      gpuSelection=null;pendingSlot=null;if(key!=='rowdist')open=true;
       step=key;view=key==='rowdist'?'circuit':'rack';tourAt=0;
       setActivity();fit(key);refreshTags();notify();redraw();
     }
     function toggleView(){
       if(!rig||closing)return;if(!trace)applySlot(rig.topology.modules[0].slot);
-      tourAt=0;view=view==='rack'?'circuit':'rack';step=view==='rack'?'psu':'circuit';
+      gpuSelection=null;tourAt=0;view=view==='rack'?'circuit':'rack';step=view==='rack'?'psu':'circuit';
       setActivity();fit(view);refreshTags();notify();redraw();
     }
     function toggleDoor(){
       if(!rig||closing)return;open=!open;tourAt=0;pendingSlot=null;
       if(!open){
-        extended=false;view='rack';step='rack';
+        gpuSelection=null;extended=false;view='rack';step='rack';
         if(rig.cooling){coolingStop=livePlan.stops.find(s=>s.key==='rack'&&s.medium===coolingStop?.medium);setActivity();}
+        else setActivity();
         fit();
       }
       refreshTags();notify();redraw();
@@ -274,7 +334,7 @@
     function toggleExtract(){if(!rig||closing)return;if(!trace){selectSlot(rig.topology.modules[0].slot);return;}tourAt=0;extended=!extended;if(extended)open=true;notify();redraw();}
     function clear(restore=false){
       if(!rig)return;
-      rig=null;geometry=null;trace=null;journey=null;livePlan=null;liveModel=null;coolingStop=null;slot=null;closing=false;tourAt=0;pendingSlot=null;
+      gpuSelection=null;rig=null;geometry=null;trace=null;journey=null;livePlan=null;liveModel=null;coolingStop=null;slot=null;closing=false;tourAt=0;pendingSlot=null;
       tags.replaceChildren();labelNodes.length=0;notify();
       if(restore&&origin)restoreCamera(origin);
       origin=null;redraw();
@@ -297,13 +357,19 @@
     }
     function hit(object){
       if(!rig||closing||!object?.nodeId)return false;
+      const part=geometry.cooling?.partById.get(object.nodeId);
+      if(gpuSelection){
+        const thermal=geometry.cooling?.branches[gpuSelection.gpuId];
+        const route=journey.edgeIds.includes(object.nodeId)?'power':thermal?.returnIds.includes(object.nodeId)?'cooling':null;
+        if(route){onGpuTrace?.(route,gpuSelection);return true;}
+      }
+      if(part?.key==='gpu')return pickGpu({serverNumber:journey.server.number,gpuNumber:part.gpuNumber});
       if(rig.cooling){
-        const part=geometry.cooling?.partById.get(object.nodeId);
         if(part)return inspectCoolant(part);
         const gpu=rig.topology.gpus.find(n=>n.id===object.nodeId);
         if(gpu){
           const tray=rig.topology.servers.find(n=>n.id===gpu.serverId);
-          return inspectCoolant({key:'gpu',medium:'supply',serverNumber:tray.number,gpuNumber:gpu.number});
+          return pickGpu({serverNumber:tray.number,gpuNumber:gpu.number});
         }
         const server=rig.topology.servers.find(n=>n.id===object.nodeId);
         if(server)return inspectCoolant({key:'server',medium:'supply',serverNumber:server.number});
@@ -331,7 +397,8 @@
       }
       return false;
     }
-    return {enter,clear,leave,tick,hit,getJourneyPlan,prepareJourney,setJourneyStep,getCoolingJourneyPlan,prepareCoolingJourney,setCoolingStep,selectSlot,toggleDoor,toggleExtract,toggleView,focusStep,positionTags,
+    return {enter,clear,leave,tick,hit,getJourneyPlan,prepareJourney,setJourneyStep,getCoolingJourneyPlan,prepareCoolingJourney,setCoolingStep,
+      selectGpu,clearGpuSelection,getGpuSelection:()=>gpuSelection,getGpuPickPoints,selectSlot,toggleDoor,toggleExtract,toggleView,focusStep,positionTags,
       get rig(){return rig;},cancelTour(){tourAt=0;}};
   }
   window.GridRackView={mount};

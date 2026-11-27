@@ -146,11 +146,14 @@ async function find(lat,lon,{radiusKm=15,limit=1000,signal}={}){
   if(!Number.isFinite(radiusKm)||radiusKm<=0||radiusKm>30)throw new RangeError('查询半径须大于 0 且不超过 30 km');
   if(!Number.isSafeInteger(limit)||limit<1)throw new RangeError('返回数量须为正整数');
   checkSignal(signal);
-  const bounds=boundsOfCircle(lat,lon,radiusKm),data=window.GridMapData,b=data?.bounds;
+  const bounds=boundsOfCircle(lat,lon,radiusKm),box=[bounds.west,bounds.south,bounds.east,bounds.north];
+  const geo=window.GridTerritoryGeo,regional=geo?await geo.loadRegion(box):null;
+  checkSignal(signal);
+  const data=regional||window.GridMapData,b=data?.bounds;
   const touchesLocal=b&&bounds.east>=b[0]&&bounds.west<=b[2]&&bounds.north>=b[1]&&bounds.south<=b[3];
   const local=touchesLocal?localRows(data):[];
   const meta={radiusKm,method:'representative',checkedAt:new Date().toISOString()};
-  if(b&&bounds.west>=b[0]&&bounds.south>=b[1]&&bounds.east<=b[2]&&bounds.north<=b[3]){
+  if(b&&bounds.west>=b[0]&&bounds.south>=b[1]&&bounds.east<=b[2]&&bounds.north<=b[3]&&(!data.coverage||geo?.coversRadius(data,box,lat,lon,radiusKm))){
     const result=rank(local,lat,lon,radiusKm,limit);
     return {...meta,...result,source:osmSource,scope:'regional',status:result.totalMatched?'ok':'empty',complete:true,asOf:data.retrieved};
   }
@@ -171,7 +174,18 @@ async function find(lat,lon,{radiusKm=15,limit=1000,signal}={}){
   return {...meta,...result,complete,status,scope,source:scope==='mixed'?worldSource+' / '+osmSource:worldSource,
     asOf:!ok&&result.totalMatched?data?.retrieved:null,tilesRead:ok,tilesRequested:tiles.length};
 }
-window.GridNearby={find};
+// Coordinates stay in tile space so the cartographic renderer can use the same Mercator origin.
+function powerLines(bytes) {
+  if(!bytes.byteLength)return [];
+  const tile=new MVT.VectorTile(new MVT.PbfReader(new Uint8Array(bytes))),layer=tile.layers.power_line,lines=[];
+  if(layer)for(let i=0;i<layer.length;i++){
+    const f=layer.feature(i),properties=f.properties;
+    if(f.type!==2||isTrue(properties.construction)||isTrue(properties.proposed)||isTrue(properties.disused))continue;
+    for(const line of f.loadGeometry())lines.push(line.map(p=>[p.x/layer.extent,p.y/layer.extent]));
+  }
+  return lines;
+}
+window.GridNearby={find,distance,powerLines};
 
 /* Bundled vector-tile reader dependencies
 @mapbox/vector-tile

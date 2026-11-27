@@ -52,6 +52,10 @@
       const data = JSON.parse(localStorage.getItem(key));
       if (Array.isArray(data?.projects)) {
         const projects = data.projects.filter(valid);
+        for(const p of projects)if(p.gridConnection!=null){
+          try{p.gridConnection=GridConnection.clean(p.gridConnection);}
+          catch{p.gridConnectionBackup=p.gridConnection;delete p.gridConnection;}
+        }
         if (projects.length) return {projects,current:projects.some(p=>p.id===data.current)?data.current:projects[0].id};
       }
     } catch { storeOK = false; }
@@ -145,7 +149,13 @@
   function setLocation(lat,lon,label) {
     if(!Number.isFinite(lat)||Math.abs(lat)>90||!Number.isFinite(lon)||Math.abs(lon)>180)return;
     const match=Math.abs(reference.lat-lat)<0.00001 && Math.abs(reference.lon-lon)<0.00001;
-    current().location={lat:+lat.toFixed(6),lon:+lon.toFixed(6),label:label||(match?reference.label:'自选候选场址')};
+    const next={lat:+lat.toFixed(6),lon:+lon.toFixed(6),label:label||(match?reference.label:'自选候选场址')};
+    const p=current(),moved=p.location.lat!==next.lat||p.location.lon!==next.lon;
+    if(moved&&p.gridConnection?.links?.length){
+      p.gridConnection={...p.gridConnection,links:[]};
+      notice('已保留自建站规格，请为新场址选择接入站。');
+    }
+    p.location=next;
     changed();updateLocation();map?.setLocation(lat,lon);
   }
   $('#quick-fields').addEventListener('input',()=>{
@@ -229,12 +239,15 @@
     const allowed=['twin','equipment','overview','world','design','aidc','industry','energy','library'];
     const hash=location.hash.slice(1);
     const direct=/^equipment\/([a-z0-9:-]+(?:\/[a-zA-Z0-9_-]+)?)$/.exec(hash);
+    const intoAidcLayout=hash==='aidc/layout';
+    const intoGrid=hash==='twin/grid';
     const intoRack=hash==='twin/rack';
     const intoTour=hash==='twin/tour';
     const intoCooling=/^twin\/cooling-tour(?:\/([1-9]\d*))?$/.exec(hash);
+    const intoGpu=/^twin\/gpu-trace(?:\/(H\d+-R\d+-[ST]\d+-G\d+))?(?:\?([^#]*))?$/.exec(hash);
     const intoLayout=hash==='twin/layout';
     const intoDevice=/^twin\/device\/([a-z0-9-]+)$/.exec(hash);
-    let id=direct?'equipment':intoRack||intoTour||intoCooling||intoLayout||intoDevice?'twin':hash;if(!allowed.includes(id))id='twin';
+    let id=intoAidcLayout?'aidc':direct?'equipment':intoRack||intoGrid||intoTour||intoCooling||intoGpu||intoLayout||intoDevice?'twin':hash;if(!allowed.includes(id))id='twin';
     const wasInspecting=inspection.open, target=history.state?.gridatlasInspect;
     const fromRoom=id==='equipment' && typeof target==='string' && twin && (activeRoute==='twin'||wasInspecting);
     const sequence=++inspectSequence;
@@ -246,7 +259,7 @@
     for(const page of all('.page'))page.hidden=page.id!==id && !(fromRoom && page.id==='twin');
     for(const a of all('[data-route]')){if(a.dataset.route===id)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');}
     if(id==='twin'){
-      if(!twin)twin=GridTwin.mount({onPlan:plan=>{
+      if(!twin)twin=GridTwin.mount({onGridPlan:plan=>{current().gridConnection=GridConnection.clean(plan);changed();},onSetLocation:setLocation,onPlan:plan=>{
         const p=current();
         if(p.rackMix && (p.config.it!==plan.config.it || p.config.density!==plan.config.density))delete p.rackMix;
         p.config=plan.config;p.rackStudy=plan.rackStudy;p.spacePlan=plan.spacePlan;changed();
@@ -258,10 +271,20 @@
         current().config.load=value;changed();
       }});
       if(!wasInspecting||entryRevision!==current().updatedAt)twin.update(current());
+      if(!wasInspecting&&intoGrid)twin.openGrid();
       if(!wasInspecting&&intoRack)twin.openRack();
       if(!wasInspecting&&intoDevice)twin.observe(intoDevice[1]);
       if(!wasInspecting&&intoTour)twin.startPowerTour();
       if(!wasInspecting&&intoCooling)twin.startCoolingTour(intoCooling[1]?Number(intoCooling[1]):null);
+      if(!wasInspecting&&intoGpu){
+        const params=new URLSearchParams(intoGpu[2]);
+        const target=intoGpu[1]?{gpuId:intoGpu[1]}:{};
+        for(const [param,key] of [['slot','slot'],['plant','coolingUnit'],['yard','yardUnit']]){
+          const value=Number(params.get(param));
+          if(Number.isSafeInteger(value)&&value>0)target[key]=value;
+        }
+        twin.showGpu(target);
+      }
       if(!wasInspecting&&intoLayout)twin.openLayout();
       if(wasInspecting){
         twin.resumeFromInspection();
@@ -284,12 +307,12 @@
     else if(id==='world')mountWorld();
     else if(id==='aidc' || id==='industry' || id==='energy') {
       const f=$('#'+id+'-frame');
-      if(!f.hasAttribute('src'))f.src=id+'/index.html';
-      else if(id==='aidc')restoreAidcProject();
+      if(!f.hasAttribute('src'))f.src=id+'/index.html'+(intoAidcLayout?'?view=layout':'');
+      else if(id==='aidc'){restoreAidcProject();if(intoAidcLayout)f.contentWindow.GridAidcProject?.showLayout();}
       else if(id==='energy')energyContext();
     }
     document.title=({twin:'算电数字孪生',equipment:'设备剖解',overview:'算电选址工作台',world:'全球基础设施地图',design:'方案设计',aidc:'AIDC 数据台',industry:'电力行业数据库',energy:'电价与政策资料',library:'方案库'})[id]+' · 算电图研';
-    if((intoRack||intoDevice||intoTour||intoCooling||intoLayout)&&!wasInspecting)requestAnimationFrame(()=>document.querySelector('.tw-visual').scrollIntoView({block:'start'}));
+    if((intoGrid||intoRack||intoDevice||intoTour||intoCooling||intoGpu||intoLayout)&&!wasInspecting)requestAnimationFrame(()=>document.querySelector('.tw-visual').scrollIntoView({block:'start'}));
     else if(!fromRoom && !(wasInspecting && id==='twin'))scrollTo(0,0);
   }
   function goto(id) {if(location.hash==='#'+id)route();else location.hash=id;}
@@ -299,7 +322,9 @@
     if(event.source===$('#energy-frame').contentWindow && event.data.type==='gridatlas-twin-ready'){energyContext();return;}
     if(event.source===$('#energy-frame').contentWindow && event.data.type==='gridatlas-open-twin'){goto('twin');return;}
     if(event.source===$('#aidc-frame').contentWindow && event.data.type==='gridatlas-aidc-ready'){
-      aidcProjectId=null;restoreAidcProject();return;
+      aidcProjectId=null;restoreAidcProject();
+      if(location.hash==='#aidc/layout')$('#aidc-frame').contentWindow.GridAidcProject?.showLayout();
+      return;
     }
     if(event.source===$('#aidc-frame').contentWindow && event.data.type==='gridatlas-aidc-state'){
       if(aidcProjectId===state.current){

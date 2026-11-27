@@ -1,0 +1,57 @@
+.tg-map{position:relative;width:100%;height:100%;isolation:isolate;overflow:hidden;background:#203137;color:#eef3f0;font-family:var(--font,sans-serif);font-size:13px}
+.tg-map canvas.tg-geography,.tg-map .tg-routes,.tg-map .tg-marks{position:absolute;inset:0;width:100%;height:100%}
+.tg-geography{display:block;touch-action:none;cursor:grab;outline-offset:-3px}
+.tg-map[data-picking=true] .tg-geography{cursor:crosshair}
+.tg-map .tg-routes,.tg-map .tg-marks{pointer-events:none}
+.tg-routes path{fill:none;stroke-linecap:round;stroke-linejoin:round}
+.tg-routes .tg-link-shadow{stroke:#13262c;stroke-width:5;opacity:.85}
+.tg-routes .tg-planned{stroke:#ffc66b;stroke-width:2.7;stroke-dasharray:8 5}
+.tg-routes .tg-candidate{stroke:#8edbe6;stroke-width:2;stroke-dasharray:2 5}
+.tg-routes text{font:600 12px system-ui,sans-serif;fill:#fff1d3}
+.tg-routes rect{fill:#27383c;stroke:#ab8b53;stroke-width:.8}
+.tg-routes g.tg-preview rect{stroke:#6299a1}.tg-routes g.tg-preview text{fill:#cff7fa}
+.tg-map .tg-mark{position:absolute;pointer-events:auto;padding:0;background:none;border:0;color:#e9f0ee;border-radius:4px;cursor:pointer;transform:translate(-50%,-60%);width:34px;height:32px;z-index:2;display:grid;place-items:center}
+.tg-mark canvas{width:32px;height:27px;display:block;filter:drop-shadow(0 2px 2px #071c21)}
+.tg-map .tg-mark[data-site-marker]{width:44px;height:36px;z-index:4}.tg-mark[data-site-marker] canvas{width:42px;height:35px}
+.tg-mark .tg-bubble{position:absolute;max-width:145px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.35;background:#163039f0;border:1px solid #54767a;color:#d9eeec;padding:3px 5px;border-radius:4px;font-size:12px;font-weight:550;pointer-events:auto}
+.tg-mark[data-site-marker] .tg-bubble{background:#11494af5;border-color:#69cec3;color:#e2fff5;font-weight:650}
+.tg-mark[aria-pressed=true] .tg-bubble,.tg-mark[data-linked=true] .tg-bubble{border-color:#d0a260;color:#ffe4ad;background:#3b3933f5}
+.tg-mark:focus-visible,.tg-pick button:focus-visible,.tg-retry:focus-visible{outline:2px solid #a6ffe7;outline-offset:2px}
+.tg-map [hidden]{display:none!important}.tg-map[data-picking=true] .tg-marks{display:none}
+.tg-meta{position:absolute;left:10px;top:9px;right:12px;display:flex;align-items:flex-start;flex-wrap:wrap;gap:4px;pointer-events:none;color:#d3e0dc;font-size:11px}
+.tg-legend,.tg-note,.tg-pick,.tg-scale,.tg-copy{background:#10252bed;border:1px solid #516669;border-radius:4px;line-height:1.4}
+.tg-legend{display:inline-flex;gap:9px;padding:4px 7px;align-items:center}
+.tg-legend span{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}.tg-legend i{display:inline-block;width:17px;height:0;border-top:2px solid #b6aaa0}
+.tg-legend .tg-sw-plan{border-top:2px dashed #ffc66b}.tg-legend .tg-sw-cand{border-top:2px dotted #8edbe6}
+.tg-note{max-width:100%;padding:4px 7px;overflow-wrap:anywhere}
+.tg-retry,.tg-pick button{pointer-events:auto;cursor:pointer;background:none;color:#c0fff0;border:0;font:inherit;text-decoration:underline;padding:0 0 0 6px}
+.tg-pick{padding:5px 8px;color:#e2fff7;border-color:#81b7a8;pointer-events:auto}
+.tg-scale{position:absolute;bottom:24px;left:10px;padding:2px 5px;color:#e2efea;pointer-events:none;font:11px system-ui,sans-serif}
+.tg-scale i{display:block;height:3px;border:1px solid #c8dcda;border-top:0;margin:1px 0}
+.tg-copy{position:absolute;bottom:4px;left:10px;max-width:calc(100% - 62px);padding:1px 5px;font:10px/1.4 system-ui,sans-serif;color:#b5c6c7}
+.tg-copy a{color:#d3e7e6;text-decoration:underline}
+@media(max-width:620px){.tg-legend{gap:6px}.tg-meta{left:5px;right:5px;top:5px;gap:2px}.tg-note{max-width:calc(100% - 34px)}.tg-mark .tg-bubble{font-size:11px;max-width:102px}.tg-mark canvas{width:28px;height:24px}.tg-scale,.tg-copy{left:5px}.tg-copy{font-size:9px}}
+@media print{.tg-copy,.tg-legend,.tg-mark,.tg-routes{print-color-adjust:exact}.tg-retry,.tg-pick{display:none}}
+.tg-routes .tg-annotation{stroke:#bbc9c6;stroke-width:.8;opacity:.7}
+@keyframes tg-planned-flow{to{stroke-dashoffset:-26}}
+@media(prefers-reduced-motion:no-preference){.tg-map[data-playing=true] .tg-planned{animation:tg-planned-flow 5s linear infinite}}
+
+.tg-mark[data-site-marker] .tg-bubble{max-width:155px}
+.tg-routes .tg-marker-stem{stroke:#acc0bc;stroke-width:1.1}
+.tg-line-key{display:none}
+.tg-map .tg-mark[data-line-number]::after{content:attr(data-line-number);position:absolute;top:-2px;right:-1px;min-width:15px;background:#ffd295;color:#392a19;border:1px solid #ac8041;border-radius:3px;font:700 10px/13px system-ui,sans-serif;text-align:center}
+@media(max-width:650px){
+  .tw-viewport.tg-shell:not([hidden]){display:grid;grid-template-rows:minmax(0,1fr) auto}
+  .tg-line-key:not([hidden]){display:block;max-height:123px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;color:#e3eeed;background:#13282f;border-top:1px solid #627374}
+  .tg-line-rows{padding:3px 7px;display:grid;gap:1px}
+  .tg-line-rows button{min-width:0;padding:3px 4px;display:grid;grid-template-columns:23px minmax(0,1fr) 42px 68px;align-items:center;gap:7px;min-height:26px;border:0;border-radius:3px;color:#edf2ec;background:transparent;font:550 13px/1.25 system-ui,sans-serif;text-align:left;cursor:pointer}
+  .tg-line-rows button+button{border-top:1px solid #395056}
+  .tg-line-rows button[aria-pressed=true],.tg-line-rows button:hover{background:#294149}
+  .tg-route-number{padding:2px 3px;color:#ffd297;background:#463c2d;border:1px solid #9b804e;border-radius:3px;font:650 11px/1.1 system-ui,sans-serif;text-align:center}
+  .tg-line-name{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+  .tg-line-rows strong,.tg-line-km{text-align:right;font-variant-numeric:tabular-nums}.tg-line-rows strong{color:#ffcf8d}
+  .tw-stage:has(.tg-shell:not([hidden]) .tg-line-key:not([hidden])){height:calc(clamp(278px,68vw,370px) + var(--tg-key-height,0px))}
+  .tw-stage:has(.tg-shell:not([hidden]) .tg-line-key:not([hidden])) .tw-camera{bottom:calc(8px + var(--tg-key-height,0px))}
+  .tw-visual:fullscreen .tw-stage:has(.tg-shell),.tw-visual.tw-expanded .tw-stage:has(.tg-shell){height:0}
+}
+.tg-routes [data-active=true] .tg-planned{stroke:#ffe4a4;stroke-width:3.5}
